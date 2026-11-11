@@ -1,0 +1,39 @@
+{
+  "name": "promptforge-ai-ide",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AI-powered browser IDE with streaming XML artifacts, Google Gemini, and WebContainers",
+  "scripts": {
+    "dev": "concurrently -k -n API,WEB -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:web": "vite --host 0.0.0.0",
+    "dev:api": "node --watch server/index.js",
+    "start:api": "node server/index.js",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/*.test.js",
+    "check": "npm run test && npm run build"
+  },
+  "dependencies": {
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.9",
+    "@codemirror/lang-javascript": "^6.2.4",
+    "@codemirror/lang-json": "^6.0.2",
+    "@uiw/react-codemirror": "^4.25.4",
+    "@webcontainer/api": "^1.6.4",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "fflate": "^0.8.2",
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^9.2.1",
+    "vite": "^6.3.0"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}
