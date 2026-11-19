@@ -1,0 +1,12 @@
+# Render Blueprint: public template demo (Gemini is disabled in production).
+# Import as a Render Blueprint after merging the PR to main.
+services:
+  - type: web
+    name: promptforge-demo
+    runtime: node
+    buildCommand: npm install --no-audit --no-fund && npm run build
+    startCommand: npm run start:api
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
