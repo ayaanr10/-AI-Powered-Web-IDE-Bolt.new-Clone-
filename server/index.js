@@ -1,13 +1,22 @@
 import 'dotenv/config';
 import express from 'express';
 import { streamGeminiText } from './gemini.js';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateFiles } from '../shared/filesystem.js';
 import { SYSTEM_PROMPT, makeUserPrompt } from './prompts.js';
 import { getDemoArtifact } from './demo.js';
 
+const production = process.env.NODE_ENV === 'production';
+const liveAvailable = !production && Boolean(process.env.GEMINI_API_KEY);
+
 export const app = express();
+// Required for WebContainers/SharedArrayBuffer on HTTPS hosting.
+app.use((_req, res, next) => {
+  res.set('Cross-Origin-Opener-Policy', 'same-origin');
+  res.set('Cross-Origin-Embedder-Policy', 'credentialless');
+  next();
+});
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 const requests = new Map();
@@ -25,7 +34,7 @@ function throttle(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, liveAvailable: Boolean(process.env.GEMINI_API_KEY), model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' });
+  res.json({ ok: true, liveAvailable, model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' });
 });
 
 app.post('/api/generate', throttle, async (req, res) => {
@@ -36,8 +45,8 @@ app.post('/api/generate', throttle, async (req, res) => {
   try { validateFiles(files); }
   catch (err) { return res.status(400).json({ error: err.message }); }
   if (!['demo', 'live'].includes(mode)) return res.status(400).json({ error: 'Invalid generation mode.' });
-  if (mode === 'live' && !process.env.GEMINI_API_KEY) {
-    return res.status(400).json({ error: 'Live AI needs GEMINI_API_KEY in your server .env. Demo mode works without it.' });
+  if (mode === 'live' && !liveAvailable) {
+    return res.status(400).json({ error: 'Live AI is available only when running locally with a server-side GEMINI_API_KEY. Public deployments are demo-only.' });
   }
 
   res.writeHead(200, {
@@ -84,8 +93,18 @@ app.post('/api/generate', throttle, async (req, res) => {
   }
 });
 
+// On Render, serve both the built Vite app and demo API from one service.
+if (production) {
+  const distDir = resolve(process.cwd(), 'dist');
+  app.use(express.static(distDir));
+  app.get(/.*/, (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(join(distDir, 'index.html'));
+  });
+}
+
 // Makes API routes easy to test without binding a port.
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 3001);
-  app.listen(port, '127.0.0.1', () => console.log(`PromptForge API running on http://localhost:${port}`));
+  app.listen(port, production ? '0.0.0.0' : '127.0.0.1', () => console.log(`PromptForge API listening on port ${port}`));
 }
