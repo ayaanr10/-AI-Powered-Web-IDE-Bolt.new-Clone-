@@ -4,6 +4,17 @@
 
 This is an **original educational project inspired by the category of tools such as Bolt.new**, not a copy of their source or a production-equivalent replacement.
 
+## Start here: simplified interface
+
+The default view is now **Prompt + Preview**. You don't need to understand a terminal or code editor to try it.
+
+1. Choose **Task manager** or **SaaS landing page** in Demo mode (these are fixed templates, not AI-generated custom designs).
+2. Click the example to generate its files, then choose **Run preview** to start the browser runtime.
+3. Click **Show code editor** only when you want to inspect and change the files; switch back to **Simple view** at any time.
+4. For truly custom requests, run locally with `GEMINI_API_KEY` on the Node backend and select **Gemini · Live AI**.
+
+A **public demo-only** deploy configuration is available in [Render deployment guide](docs/DEPLOY_RENDER.md). The public deployment intentionally disables live Gemini generation to protect API credentials and usage. The full AI workflow remains available locally.
+
 ## What works
 
 - **Natural language → React source files.** Google Gemini API integration, streamed through a **Node/Express backend** so the API key never goes to the browser.
