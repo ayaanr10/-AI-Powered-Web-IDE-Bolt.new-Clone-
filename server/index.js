@@ -3,12 +3,21 @@ import express from 'express';
 import { streamGeminiText } from './gemini.js';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const publicDemo = process.env.PUBLIC_DEMO === '1';
+const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
 import { validateFiles } from '../shared/filesystem.js';
 import { SYSTEM_PROMPT, makeUserPrompt } from './prompts.js';
 import { getDemoArtifact } from './demo.js';
 
 export const app = express();
 app.disable('x-powered-by');
+// WebContainers need these two headers for browser-based Node.js.
+app.use((_req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+  next();
+});
 app.use(express.json({ limit: '1mb' }));
 const requests = new Map();
 const WINDOW_MS = 5 * 60 * 1000;
@@ -25,7 +34,7 @@ function throttle(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, liveAvailable: Boolean(process.env.GEMINI_API_KEY), model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' });
+  res.json({ ok: true, liveAvailable: !publicDemo && Boolean(process.env.GEMINI_API_KEY), model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' });
 });
 
 app.post('/api/generate', throttle, async (req, res) => {
@@ -36,6 +45,9 @@ app.post('/api/generate', throttle, async (req, res) => {
   try { validateFiles(files); }
   catch (err) { return res.status(400).json({ error: err.message }); }
   if (!['demo', 'live'].includes(mode)) return res.status(400).json({ error: 'Invalid generation mode.' });
+  if (mode === 'live' && publicDemo) {
+    return res.status(403).json({ error: 'Public preview uses Demo mode to protect API usage. Run the app locally for Gemini AI.' });
+  }
   if (mode === 'live' && !process.env.GEMINI_API_KEY) {
     return res.status(400).json({ error: 'Live AI needs GEMINI_API_KEY in your server .env. Demo mode works without it.' });
   }
@@ -84,8 +96,21 @@ app.post('/api/generate', throttle, async (req, res) => {
   }
 });
 
+// In production, one Express server serves both the React UI and the API.
+// Local development continues to use Vite at http://localhost:5173.
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(distDir));
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api/')) {
+      return res.sendFile(resolve(distDir, 'index.html'));
+    }
+    next();
+  });
+}
+
 // Makes API routes easy to test without binding a port.
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 3001);
-  app.listen(port, '127.0.0.1', () => console.log(`PromptForge API running on http://localhost:${port}`));
+  const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1';
+  app.listen(port, host, () => console.log(`Buildora running at http://${host}:${port}`));
 }
