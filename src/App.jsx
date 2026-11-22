@@ -183,11 +183,6 @@ export default function App() {
   const statusText = { idle: 'Run to launch the app', booting: 'Booting Node.js', installing: 'Installing packages', starting: 'Starting Vite', ready: 'Application is live', error: 'Check terminal for details' }[wc.status];
 
   return <div className="buildora">
-    <header className="simple-header">
-      <button className="brand-link" onClick={() => setScreen('home')} title="Buildora home">
-        <span className="brand-mark"><Braces size={20}/></span><span>buildora<span className="brand-accent">.</span></span>
-      </button>
-      <span className=  return <div className="buildora">
     <header className="site-header">
       <button className="site-brand" onClick={() => setScreen('home')} aria-label="Buildora home">
         <span className="brand-symbol"><Braces size={22} strokeWidth={2.7}/></span>
