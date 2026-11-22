@@ -12,6 +12,14 @@ This is an **original educational project inspired by the category of tools such
 
 Start with the [simple Buildora walkthrough](docs/BUILDORA_SIMPLE_GUIDE.md) before reading the full architecture docs.
 
+## Deploy Buildora (public demo)
+
+**[Deploy to Render](https://render.com/deploy?repo=https://github.com/ayaanr10/-AI-Powered-Web-IDE-Bolt.new-Clone-)**
+
+This link uses the included `render.yaml` Blueprint to create a free Render web service. The public version runs in **Demo mode** (no Gemini API key, no AI API charges). It is an educational deployment, not a production-secure public AI generator.
+
+See [step-by-step Render deployment](docs/DEPLOY_RENDER.md). After Render shows **Live**, open the URL assigned to your service. The public URL is not known until you complete deployment in your Render account.
+
 ## What works
 
 - **Natural language → React source files.** Google Gemini API integration, streamed through a **Node/Express backend** so the API key never goes to the browser.
@@ -21,7 +29,7 @@ Start with the [simple Buildora walkthrough](docs/BUILDORA_SIMPLE_GUIDE.md) befo
 - **Demo mode with no account or key.** Deterministic templates (task manager + responsive landing page) exercise the **same streaming/parser/filesystem path** as Gemini.
 - **Tests and documentation.** Node built-in tests for parser boundaries, file-path safety, mount structure and demo projects.
 
-**Scope:** A usable local **MVP**, not all of Bolt.new. This does not include collaboration, authentication, production deployment, command-running AI agents, cloud persistence, billing, or an audited sandbox. Preview uses the browser-native WebContainers runtime, not a remotely hosted VM.
+**Scope:** A usable local **MVP**, not all of Bolt.new. This does not include collaboration, authentication, production-grade hosting, command-running AI agents, cloud persistence, billing, or an audited sandbox. Preview uses the browser-native WebContainers runtime, not a remotely hosted VM.
 
 ## Quick start
 
