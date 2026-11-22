@@ -50,7 +50,7 @@ function eventText(data) {
 }
 
 export async function* streamGeminiText({
-  apiKey, model = 'gemini-2.5-flash', systemPrompt, userPrompt,
+  apiKey, model = 'gemini-3.8-flash', systemPrompt, userPrompt,
   signal, fetchImpl = fetch,
 }) {
   if (!apiKey) throw new Error('Missing GEMINI_API_KEY.');
