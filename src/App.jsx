@@ -82,6 +82,7 @@ export default function App() {
   const filesRef = useRef(files);
   const [activeFile, setActiveFile] = useState('src/App.jsx');
   const [view, setView] = useState('preview');
+  const [screen, setScreen] = useState('home');
   const [mode, setMode] = useState('demo');
   const [liveAvailable, setLiveAvailable] = useState(false);
   const [prompt, setPrompt] = useState('');
@@ -150,6 +151,7 @@ export default function App() {
   const generate = async (text = prompt) => {
     if (!text.trim() || busy) return;
     const request = text.trim();
+    setScreen('workspace');
     setPrompt(''); setBusy(true);
     setMessages((m) => [...m, { role: 'user', text: request }, { role: 'assistant', text: 'Generating project files…', files: [] }]);
     const controller = new AbortController(); abortRef.current = controller;
@@ -190,41 +192,77 @@ export default function App() {
   const fileCount = Object.keys(files).length;
   const statusText = { idle: 'Run to launch the app', booting: 'Booting Node.js', installing: 'Installing packages', starting: 'Starting Vite', ready: 'Application is live', error: 'Check terminal for details' }[wc.status];
 
-  return <div className="workspace">
-    <div className="topbar">
-      <div className="brand-zone"><div className="brand-icon"><Braces size={19} strokeWidth={2.8}/></div><span className="brand-name">promptforge<span className="brand-period">.</span></span><span className="brand-divider"/><span className="project-name"><Layers3 size={14}/> My workspace <ChevronDown size={13}/></span></div>
-      <div className="header-center"><span className="workspace-tag"><span className="workspace-tag-dot"/> PERSONAL WORKSPACE</span><span className="top-caption">Built for ideas that ship.</span></div>
-      <div className="top-actions"><span className="local-only"><HardDrive size={13}/> Saved locally</span><button className="header-button" onClick={() => importRef.current?.click()} title="Import a Vite project ZIP"><Upload size={15}/> <span>Import</span></button><button className="header-button export" onClick={() => downloadZip(files)}><Download size={15}/> <span>Export code</span></button><button className="icon-button info-button" onClick={() => setShowInfo(true)} aria-label="About project"><CircleHelp size={18}/></button></div>
-      <input ref={importRef} type="file" accept=".zip,application/zip" hidden onChange={importProject} />
-    </div>
-    <div className="main-layout">
-      <aside className="chat-panel">
-        <div className="panel-heading chat-heading"><div className="panel-heading-label"><span className="heading-icon"><WandSparkles size={16}/></span><div><strong>AI Assistant</strong><small>Your creative copilot</small></div></div><div className="sparkle-chip"><Sparkles size={11}/> GENERATE</div></div>
-        <div className="chat-scroller" ref={scrollRef}>
-          <div className="chat-intro"><div className="intro-orb"><Sparkles size={25}/></div><span className="intro-label">AI-POWERED WORKSPACE</span><h2>What will you <em>build today?</em></h2><p>Describe it in your own words. Watch it become a real, editable app.</p></div>
-          <div className="suggested-section"><div className="section-kicker">START WITH AN IDEA <span>✦</span></div><div className="prompt-cards">{suggested.map((item) => <button key={item.title} className="prompt-card" onClick={() => generate(item.prompt)} disabled={busy}><span className="suggestion-icon">{item.icon}</span><span className="suggestion-text"><strong>{item.title}</strong><small>{item.detail}</small></span><ArrowRight size={15}/></button>)}</div></div>
-          <div className="conversation"><div className="section-kicker">CONVERSATION</div>{messages.map((message, i) => <ChatMessage key={i} message={message}/>)}</div>
-          {busy && <div className="streaming"><span className="pulse-three"><i/><i/><i/></span> Creating your app… <button onClick={() => abortRef.current?.abort()}>Stop</button></div>}
+  return <div className="buildora">
+    <header className="simple-header">
+      <button className="brand-link" onClick={() => setScreen('home')} title="Buildora home">
+        <span className="brand-mark"><Braces size={20}/></span><span>buildora<span className="brand-accent">.</span></span>
+      </button>
+      <span className="header-description">AI-powered web IDE</span>
+      <div className="header-actions">
+        {screen === 'workspace' && <button className="quiet-button" onClick={() => setScreen('home')}><Plus size={16}/> New idea</button>}
+        <button className="quiet-button" onClick={() => setShowInfo(true)}><CircleHelp size={16}/> About</button>
+      </div>
+    </header>
+
+    {screen === 'home' ? <main className="welcome-page">
+      <div className="welcome-eyebrow"><Sparkles size={15}/> BUILDORA STUDIO</div>
+      <h1>From idea to <span>running application.</span></h1>
+      <p className="welcome-description">Describe a website or app you want to build. Buildora creates editable React files that you can run and explore.</p>
+
+      <form className="home-composer" onSubmit={(event) => { event.preventDefault(); generate(); }}>
+        <textarea aria-label="Describe your app idea" placeholder="Build a personal portfolio with an About section, projects and a contact form..." value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }} rows={4}/>
+        <div className="composer-bottom">
+          <label className="mode-control"><span>Mode</span><select aria-label="Generation mode" value={mode} onChange={(e) => setMode(e.target.value)}><option value="demo">Demo (no key)</option><option value="live">Gemini AI {!liveAvailable ? '(setup needed)' : ''}</option></select></label>
+          <button className="primary-action" type="submit" disabled={!prompt.trim() || busy}>Generate app <ArrowRight size={16}/></button>
         </div>
-        <div className="composer"><div className="composer-header"><span><span className="mode-led"/> MODEL</span><select aria-label="Generation mode" value={mode} onChange={(e) => setMode(e.target.value)}><option value="demo">Demo · no API key</option><option value="live">Gemini · Live AI{!liveAvailable ? ' (setup needed)' : ''}</option></select></div><form onSubmit={(e) => { e.preventDefault(); generate(); }}><textarea aria-label="Describe your project" placeholder="Ask anything… e.g. Build a finance dashboard with charts and filters" value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }} rows={3}/><div className="composer-footer"><span><Zap size={13}/> Shift + Enter for new line</span><button className="send-button" type="submit" disabled={busy || !prompt.trim()} aria-label="Generate app">{busy ? <LoaderCircle size={16} className="spinning"/> : <ArrowUp size={17} strokeWidth={2.8}/>}</button></div></form><div className="composer-warning"><ShieldCheck size={13}/> API key stays on the local Node server</div></div>
-      </aside>
-      <section className="code-panel">
-        <div className="panel-heading code-heading"><div className="panel-heading-label"><Code2 size={17} className="heading-line-icon"/><div><strong>Code editor</strong><small>Explore & edit your project</small></div></div><span className="file-counter">{fileCount} FILES</span></div>
-        <div className="code-body"><div className="file-explorer"><div className="explorer-title"><span>EXPLORER</span><button className="tiny-button" aria-label="New file" onClick={addFile} title="New file"><FilePlus2 size={15}/></button></div><div className="project-tree"><div className="root-folder"><ChevronDown size={13}/> <FolderOpen size={15}/> <span>PROMPTFORGE-APP</span></div><TreeBranch tree={tree} activeFile={activeFile} onSelect={setActiveFile}/></div><div className="explorer-bottom"><GitBranch size={14}/> main <span>●</span> local changes</div></div>
-          <div className="editor-side"><div className="file-tab"><span className="file-tab-name">{fileIcon(activeFile)} {activeFile.split('/').at(-1)}</span><span className="tab-path">{activeFile}</span><button title="Delete file" className="tiny-button" onClick={removeFile}><Trash2 size={14}/></button></div><div className="code-mirror"><CodeMirror key={activeFile} value={files[activeFile] ?? ''} height="100%" theme="dark" extensions={extensions} onChange={updateFile} basicSetup={{ foldGutter: true, highlightActiveLine: true, lineNumbers: true, autocompletion: true }} /></div><div className="editor-status"><div><span className="green-mini"/> JavaScript ES6+ <span className="status-separator">│</span> UTF-8</div><div><Check size={13}/> Autosaved locally</div></div></div></div>
-        <div className="terminal-bar"><button className={'terminal-toggle '+(terminalVisible ? 'terminal-active' : '')} onClick={() => setTerminalVisible(!terminalVisible)}><Terminal size={15}/> TERMINAL <ChevronDown size={13} className={terminalVisible ? 'rotated' : ''}/></button><div className="terminal-caption"><span className="green-mini"/> {statusText}</div><button className="tiny-button" title="Toggle terminal" onClick={() => setTerminalVisible(!terminalVisible)}><PanelBottom size={15}/></button></div>
-        {terminalVisible && <div className="terminal-console">{wc.logs.map((line, i) => <div key={i}><span className="prompt-symbol">›</span>{line}</div>)}{wc.error && <p className="terminal-error">{wc.error}</p>}</div>}
-      </section>
-      <section className="preview-panel"><div className="panel-heading preview-heading"><div className="panel-heading-label"><Monitor size={17} className="heading-line-icon"/><div><strong>Live preview</strong><small>See your app come to life</small></div></div><Indicator status={wc.status}/></div>
-        <div className="preview-toolbar"><div className="preview-tabs"><button className={view === 'preview' ? 'selected' : ''} onClick={() => setView('preview')}><Globe size={14}/> Preview</button><button className={view === 'details' ? 'selected' : ''} onClick={() => setView('details')}><Activity size={14}/> Details</button></div><div className="preview-tools"><button className="tool-button" title="Restart runtime / reinstall packages" onClick={() => wc.run(filesRef.current)} disabled={wc.status === 'booting' || wc.status === 'installing'}><RefreshCw size={15}/></button><button className="tool-button" title="Open preview in new tab" disabled={!wc.previewUrl} onClick={() => window.open(wc.previewUrl, '_blank', 'noopener,noreferrer')}><ExternalLink size={15}/></button></div></div>
-        <div className="address-bar"><span className="browser-controls"><i/><i/><i/></span><span className="address"><ShieldCheck size={13}/>{wc.previewUrl || 'localhost:5173 / browser preview'}</span><button onClick={() => wc.run(filesRef.current)} aria-label="Run or restart app" title="Run app"><Play size={14} fill="currentColor"/></button></div>
-        <div className="preview-surface">
-          {view === 'details' ? <div className="details-view"><div className="details-header"><span><Activity size={17}/> RUNTIME OVERVIEW</span><h2>Under the hood.</h2><p>A browser-native development environment with a real Node.js process.</p></div><div className="detail-rows"><div><strong>Runtime</strong><span>WebContainers API</span></div><div><strong>Framework</strong><span>React + Vite</span></div><div><strong>AI mode</strong><span>{mode === 'demo' ? 'Deterministic demo' : 'Google Gemini'}</span></div><div><strong>Project files</strong><span>{fileCount} editable files</span></div><div><strong>Status</strong><span>{wc.status}</span></div><div><strong>Storage</strong><span>Browser localStorage</span></div></div><button className="primary-button" onClick={() => setView('preview')}>Back to preview <ArrowRight size={15}/></button></div> : wc.previewUrl ? <iframe key={wc.previewUrl} className="preview-iframe" src={wc.previewUrl} title="Generated application preview" allow="cross-origin-isolated; clipboard-read; clipboard-write"/> : <div className="preview-empty"><div className="preview-empty-art"><div className="art-halo"/><div className="art-window"><div className="art-header"><i/><i/><i/><span/></div><div className="art-body"><span className="art-pill"/><span className="art-title"/><span className="art-title short"/><span className="art-copy"/><span className="art-copy small"/><span className="art-btn"/></div></div><div className="art-flower">✳</div><div className="art-star">✦</div></div><div className="empty-caption"><h3>{['booting', 'installing', 'starting'].includes(wc.status) ? 'Preparing your workspace…' : 'Your canvas awaits.'}</h3><p>{wc.status === 'error' ? wc.error : 'Start your project to see a real React app running right here in your browser.'}</p></div><button className="run-button" onClick={() => wc.run(filesRef.current)} disabled={['booting', 'installing', 'starting'].includes(wc.status)}>{['booting', 'installing', 'starting'].includes(wc.status) ? <LoaderCircle size={16} className="spinning"/> : <Play size={15} fill="currentColor"/>}{['booting', 'installing', 'starting'].includes(wc.status) ? 'Preparing...' : 'Run project'} <ArrowRight size={15}/></button><span className="preview-tip">Powered by WebContainers · No local CLI needed to run generated apps</span></div>}
-        </div><div className="preview-bottom"><div><span className="live-dot"/> WEB PREVIEW <span className="status-separator">│</span> <span>localhost</span></div><div><Zap size={13}/> Vite HMR enabled</div></div>
-      </section>
-    </div>
-    <div className="bottom-bar"><div><span className="bottom-logo"><Braces size={13}/></span> PromptForge <span className="bottom-separator">/</span> AI-powered web IDE <span className="bottom-separator">/</span> v1.0</div><div><span className="bottom-led"/> All changes saved <span className="bottom-separator">│</span> <span className="shortcut">⌘ / Ctrl + Enter</span> to ship your idea</div></div>
-    {notification && <div className="toast"><Sparkles size={16}/>{notification}<button aria-label="Dismiss" onClick={() => setNotification('')}><X size={14}/></button></div>}
-    {showInfo && <div className="modal-backdrop" onClick={() => setShowInfo(false)}><div className="info-modal" onClick={(e) => e.stopPropagation()}><button className="modal-close" onClick={() => setShowInfo(false)}><X size={18}/></button><div className="modal-mark"><Braces size={27}/></div><h2>Made to be understood.</h2><p>PromptForge is a full-stack learning project, not just a mockup. Natural-language prompts produce XML file operations, the parser updates a virtual filesystem, CodeMirror edits files, and WebContainers run the React project in your browser.</p><div className="modal-stack"><span>React 19</span><span>Node.js</span><span>Gemini API</span><span>WebContainers</span><span>CodeMirror</span><span>Vite</span></div><button className="primary-button" onClick={() => { setShowInfo(false); setView('details'); }}>Explore architecture <ArrowRight size={15}/></button></div></div>}
+      </form>
+      <div className="example-section"><span>OR TRY AN EXAMPLE</span><div className="example-buttons">{suggested.map((item) => <button key={item.title} className="example-button" onClick={() => generate(item.prompt)} disabled={busy}>{item.title} <ArrowUp size={14}/></button>)}</div></div>
+      <div className="welcome-steps"><div><span>01</span><strong>Describe an idea</strong><small>Write what you want in plain English.</small></div><div><span>02</span><strong>Generate your code</strong><small>See React files created automatically.</small></div><div><span>03</span><strong>Run and edit</strong><small>Preview the app and change its code.</small></div></div>
+      <button className="existing-project" onClick={() => setScreen('workspace')}><Code2 size={16}/> Open existing workspace <ArrowRight size={15}/></button>
+    </main> : <main className="studio-page">
+      <div className="studio-heading">
+        <div><span className="studio-eyebrow">YOUR WORKSPACE</span><h1>Build your next idea.</h1><p>Ask Buildora to make changes, edit the code, or run your app.</p></div>
+        <div className="studio-actions">
+          <button className="quiet-button" onClick={() => importRef.current?.click()}><Upload size={15}/> Import</button>
+          <button className="quiet-button" onClick={() => downloadZip(files)}><Download size={15}/> Export code</button>
+        </div>
+      </div>
+      <div className="studio-grid">
+        <section className="studio-panel assistant-panel">
+          <div className="simple-panel-title"><div><Sparkles size={18}/><strong>Build with AI</strong></div><span className="small-label">{mode === 'demo' ? 'Demo mode' : 'Gemini AI'}</span></div>
+          <div className="conversation-list" ref={scrollRef}>
+            {messages.map((message, index) => <ChatMessage key={index} message={message}/>)}
+            {busy && <div className="progress-note"><LoaderCircle size={15} className="spinning"/> Creating your app... <button onClick={() => abortRef.current?.abort()}>Stop</button></div>}
+          </div>
+          <form className="studio-composer" onSubmit={(event) => { event.preventDefault(); generate(); }}>
+            <textarea aria-label="Ask Buildora to change your app" placeholder="Add a dark mode toggle..." rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }}/>
+            <div className="composer-bottom">
+              <select aria-label="Generation mode" value={mode} onChange={(e) => setMode(e.target.value)}><option value="demo">Demo</option><option value="live">Gemini AI</option></select>
+              <button className="primary-action" type="submit" disabled={busy || !prompt.trim()}>{busy ? 'Creating...' : 'Generate'} <ArrowUp size={15}/></button>
+            </div>
+          </form>
+        </section>
+        <section className="studio-panel editor-panel">
+          <div className="simple-panel-title"><div><Code2 size={18}/><strong>Code editor</strong></div><span className="small-label">{fileCount} files</span></div>
+          <div className="editor-workarea">
+            <nav className="simple-files" aria-label="Project files"><div className="files-heading"><span>FILES</span><button onClick={addFile} aria-label="Add file" title="Add file"><FilePlus2 size={17}/></button></div><TreeBranch tree={tree} activeFile={activeFile} onSelect={setActiveFile}/></nav>
+            <div className="simple-editor"><div className="editor-file-heading"><span>{fileIcon(activeFile)} {activeFile}</span><button className="icon-only" onClick={removeFile} title="Delete selected file" aria-label="Delete file"><Trash2 size={15}/></button></div><div className="editor-code"><CodeMirror key={activeFile} value={files[activeFile] ?? ''} height="100%" theme="dark" extensions={extensions} onChange={updateFile} basicSetup={{ foldGutter: true, highlightActiveLine: true, lineNumbers: true, autocompletion: true }}/></div></div>
+          </div>
+          <div className="editor-footer"><span><Check size={13}/> Auto-saved in your browser</span><button onClick={() => setTerminalVisible(!terminalVisible)}><Terminal size={15}/> {terminalVisible ? 'Hide logs' : 'Show logs'}</button></div>
+          {terminalVisible && <div className="simple-logs">{wc.logs.map((line,index) => <div key={index}>{line}</div>)}{wc.error && <p>{wc.error}</p>}</div>}
+        </section>
+        <section className="studio-panel live-panel">
+          <div className="simple-panel-title"><div><Monitor size={18}/><strong>Live preview</strong></div><Indicator status={wc.status}/></div>
+          <div className="preview-actions"><span>{statusText}</span><div><button className="quiet-button" onClick={() => wc.run(filesRef.current)} disabled={['booting','installing','starting'].includes(wc.status)}><Play size={15}/> {wc.status === 'ready' ? 'Restart' : 'Run app'}</button><button className="icon-only" disabled={!wc.previewUrl} onClick={() => window.open(wc.previewUrl,'_blank','noopener,noreferrer')} aria-label="Open preview in a new tab" title="Open preview"><ExternalLink size={15}/></button></div></div>
+          <div className="simple-preview">{wc.previewUrl ? <iframe key={wc.previewUrl} src={wc.previewUrl} title="Generated application preview" allow="cross-origin-isolated; clipboard-read; clipboard-write"/> : <div className="preview-placeholder"><div className="placeholder-icon"><Monitor size={34}/></div><h2>{['booting','installing','starting'].includes(wc.status) ? 'Preparing your app...' : 'See your app here'}</h2><p>{wc.error || 'Click Run app to launch your React project in the browser.'}</p><button className="primary-action" onClick={() => wc.run(filesRef.current)} disabled={['booting','installing','starting'].includes(wc.status)}>{['booting','installing','starting'].includes(wc.status) ? 'Starting...' : 'Run app'} <ArrowRight size={16}/></button></div>}</div>
+          <div className="preview-help">The preview runs with WebContainers. The first start may need to install packages.</div>
+        </section>
+      </div>
+      <div className="studio-bottom"><span>React + Vite · Gemini or Demo · Browser preview</span><button onClick={resetProject}><RotateCcw size={13}/> Reset project</button></div>
+    </main>}
+
+    <input ref={importRef} type="file" accept=".zip,application/zip" hidden onChange={importProject}/>
+    {notification && <div className="simple-toast" role="status"><Sparkles size={16}/>{notification}<button onClick={() => setNotification('')} aria-label="Dismiss"><X size={15}/></button></div>}
+    {showInfo && <div className="simple-overlay" onClick={() => setShowInfo(false)}><div className="simple-dialog" role="dialog" aria-modal="true" aria-label="About Buildora" onClick={(e) => e.stopPropagation()}><button className="dialog-close" onClick={() => setShowInfo(false)} aria-label="Close"><X size={18}/></button><div className="brand-mark"><Braces size={22}/></div><h2>About Buildora</h2><p>Buildora turns your idea into React source files. A small Node.js server streams demo or Gemini-generated changes, a parser updates the files, and WebContainers run the app inside your browser.</p><p>Your edits are stored locally in this browser. The Gemini API key belongs on the Node server, never in the frontend.</p><button className="primary-action" onClick={() => setShowInfo(false)}>Got it <Check size={16}/></button></div></div>}
   </div>;
 }
