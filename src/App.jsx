@@ -23,7 +23,7 @@ const STORAGE_KEY = 'promptforge-project-v1';
 const suggested = [
   { icon: '✦', title: 'SaaS landing page', detail: 'Elegant hero, features & signup', prompt: 'Build a modern SaaS landing page for a creative productivity app. Make it responsive with interactive navigation and a working signup confirmation.' },
   { icon: '▣', title: 'Task manager', detail: 'Lists, completion & filtering', prompt: 'Build a beautiful, interactive task manager with add, complete, delete, filter and progress tracking.' },
-  { icon: '◈', title: 'Analytics dashboard', detail: 'Metrics, visuals & controls', prompt: 'Build a clean analytics dashboard with metric cards, visual bar charts made with CSS, and interactive filters.' },
+  { icon: '◈', title: 'Restaurant website', detail: 'Menu, categories & booking form', prompt: 'Build a restaurant website with a food menu, category filters and a reservation form.' },
 ];
 function loadFiles() {
   try { const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (stored) return validateFiles(stored); }
@@ -88,6 +88,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showFullPreview, setShowFullPreview] = useState(false);
   const [notification, setNotification] = useState('');
   const [messages, setMessages] = useState([{ role: 'assistant', text: 'Hey! Describe what you want to build. I’ll turn your idea into a React app with editable files and a real browser preview.' }]);
   const scrollRef = useRef(null);
@@ -104,6 +105,14 @@ export default function App() {
     return () => clearTimeout(id);
   }, [files, wc.status]);
   useEffect(() => { if (!notification) return; const id = setTimeout(() => setNotification(''), 3500); return () => clearTimeout(id); }, [notification]);
+  useEffect(() => {
+    if (!showFullPreview) return;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setShowFullPreview(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showFullPreview]);
 
   const extensions = useMemo(() => {
     const language = languageFor(activeFile);
@@ -266,7 +275,7 @@ export default function App() {
 
             <section className="preview-panel">
               <div className="panel-title"><div><Monitor size={18}/><h2>Preview</h2></div><Indicator status={wc.status}/></div>
-              <div className="preview-controls"><span>{statusText}</span><div><button className="icon-control" onClick={() => wc.run(filesRef.current)} title="Run or restart preview" aria-label="Run or restart preview" disabled={['booting','installing','starting'].includes(wc.status)}><RefreshCw size={15}/></button><button className="icon-control" onClick={() => window.open(wc.previewUrl,'_blank','noopener,noreferrer')} disabled={!wc.previewUrl} title="Open preview in new tab" aria-label="Open preview in new tab"><ExternalLink size={15}/></button></div></div>
+              <div className="preview-controls"><span>{statusText}</span><div><button className="icon-control" onClick={() => wc.run(filesRef.current)} title="Run or restart preview" aria-label="Run or restart preview" disabled={['booting','installing','starting'].includes(wc.status)}><RefreshCw size={15}/></button><button className="icon-control" onClick={() => setShowFullPreview(true)} disabled={!wc.previewUrl} title="Expand generated preview" aria-label="Expand generated preview"><Maximize2 size={15}/></button></div></div>
               <div className="preview-surface">{wc.previewUrl ? <iframe key={wc.previewUrl} src={wc.previewUrl} title="Generated application preview" allow="cross-origin-isolated; clipboard-read; clipboard-write"/> : <div className="preview-empty"><div className="preview-placeholder-icon"><Monitor size={30}/></div><h3>{['booting','installing','starting'].includes(wc.status) ? 'Preparing your app…' : 'Your app will appear here'}</h3><p>{wc.error || 'Run your project to see the generated React app in action.'}</p><button className="blue-button" onClick={() => wc.run(filesRef.current)} disabled={['booting','installing','starting'].includes(wc.status)}><Play size={15}/>{['booting','installing','starting'].includes(wc.status) ? 'Starting…' : 'Run app'}</button></div>}</div>
               <div className="preview-footer">Powered by React, Vite &amp; WebContainers</div>
             </section>
@@ -276,6 +285,15 @@ export default function App() {
       </main>
     }
 
+    {showFullPreview && wc.previewUrl && <div className="full-preview-backdrop" role="dialog" aria-modal="true" aria-label="Expanded generated application preview">
+      <div className="full-preview-window">
+        <div className="full-preview-header">
+          <div><Monitor size={18}/><strong>Generated app preview</strong><span>Full-size view</span></div>
+          <button className="light-button" onClick={() => setShowFullPreview(false)} aria-label="Close expanded preview"><X size={17}/> Back to editor</button>
+        </div>
+        <iframe src={wc.previewUrl} title="Full-size generated application preview" allow="cross-origin-isolated; clipboard-read; clipboard-write"/>
+      </div>
+    </div>}
     <input ref={importRef} type="file" accept=".zip,application/zip" hidden onChange={importProject}/>
     {notification && <div className="app-toast" role="status"><Sparkles size={16}/><span>{notification}</span><button onClick={() => setNotification('')} aria-label="Dismiss notification"><X size={16}/></button></div>}
     {showInfo && <div className="modal-backdrop" onClick={() => setShowInfo(false)}><div className="about-modal" role="dialog" aria-modal="true" aria-label="About Buildora" onClick={(event) => event.stopPropagation()}><button className="close-modal" onClick={() => setShowInfo(false)} title="Close dialog" aria-label="Close"><X size={20}/></button><div className="about-mark"><Braces size={24}/></div><h2>Buildora</h2><p>Describe an app, then explore its editable React files and live preview. The frontend sends requests to an Express API, which streams demo or Gemini output into our file parser.</p><p>Files are saved locally in this browser. The public site offers demo templates; Gemini requires private server configuration.</p><button className="blue-button" onClick={() => setShowInfo(false)}>Got it <Check size={16}/></button></div></div>}
