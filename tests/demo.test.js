@@ -24,3 +24,21 @@ test('demo mode landing page works with arbitrary streaming chunks', () => {
   assert.equal(actions.length, 3);
   assert.match(actions[1].content, /Join the waitlist/);
 });
+
+test('demo mode creates a restaurant website instead of a generic landing page', () => {
+  const artifact = parseArtifact(getDemoArtifact('Build a restaurant site with menu and reservations'));
+  assert.equal(artifact.title, 'Savour Restaurant Website');
+  let files = { ...seedProject };
+  for (const action of artifact.actions) files = applyAction(files, action);
+  assert.equal(validateFiles(files), files);
+  assert.match(files['src/App.jsx'], /Savour|restaurant/);
+  assert.match(files['src/App.jsx'], /submitReservation/);
+  assert.match(files['src/styles.css'], /restaurant/);
+});
+
+test('demo mode does not pretend unsupported custom prompts were generated', () => {
+  assert.throws(
+    () => getDemoArtifact('Make a realistic trading chart application'),
+    /Demo mode only supports three templates/
+  );
+});
