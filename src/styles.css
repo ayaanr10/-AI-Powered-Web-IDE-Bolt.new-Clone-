@@ -121,6 +121,8 @@ button:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-v
   gap:8px;color:#697d97;font-size:11px;line-height:1.5;flex-wrap:wrap }
 .generation-status>svg { color:#438b72;flex-shrink:0 }
 .generation-status>button { border:0;background:none;color:#ce4444;font-size:11px }
+.generation-error { color:#bd3c45;font-weight:700;overflow-wrap:anywhere;max-width:100% }
+
 .activity-details { margin-left:auto;position:relative;flex-shrink:0;color:#2563eb }
 .activity-details summary { cursor:pointer;font-size:11px;list-style:disclosure-closed }
 .activity-details[open] summary { list-style:disclosure-open }
