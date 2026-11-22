@@ -193,6 +193,32 @@ button:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-v
   background:#eff6ff;color:#24446e;border:1px solid #c9ddfd;box-shadow:0 10px 42px #1f385428;font-size:12px }
 .app-toast>svg { color:#2563eb;flex-shrink:0 }
 .app-toast button { margin-left:auto;display:grid;place-items:center;background:none;border:0;color:#5c7392 }
+
+/* Full-size generated app preview stays in Buildora instead of opening a new tab. */
+.full-preview-backdrop {
+  position:fixed; inset:0; z-index:45; padding:18px;
+  background:#e8eff9; display:flex; align-items:stretch; justify-content:center
+}
+.full-preview-window {
+  background:#fff; width:min(1600px,100%); height:100%;
+  border:1px solid #d9e4f1; border-radius:15px; overflow:hidden;
+  box-shadow:0 15px 65px #1b34602d; display:flex; flex-direction:column; min-height:0
+}
+.full-preview-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 18px; border-bottom:1px solid #e6ecf5; gap:14px; flex-shrink:0
+}
+.full-preview-header>div { display:flex; align-items:center; gap:10px; color:#2563eb }
+.full-preview-header strong { color:#20324b; font-size:13px }
+.full-preview-header span { color:#8798ab; font-size:11px; border-left:1px solid #e1e8f1; padding-left:10px }
+.full-preview-window iframe { width:100%; flex:1; min-height:0; border:0; background:#fff }
+@media(max-width:690px) {
+  .full-preview-backdrop { padding:0 }
+  .full-preview-window { border-radius:0 }
+  .full-preview-header { padding:10px }
+  .full-preview-header span { display:none }
+}
+
 .modal-backdrop { position:fixed;inset:0;z-index:30;background:#17243b70;
   display:grid;place-items:center;padding:20px }
 .about-modal { width:min(460px,100%);position:relative;background:#fff;border-radius:18px;
