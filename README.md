@@ -1,8 +1,16 @@
-# PromptForge — an AI-powered React IDE
+# Buildora — an AI-powered React IDE
 
-**A real, interview-explainable full-stack project.** Turn a natural-language request into editable, multi-file React applications. The system streams Gemini's output through an XML-like artifact parser, updates a virtual filesystem, and runs the generated app inside the browser using WebContainers.
+**A beginner-friendly, interview-explainable full-stack project.** Turn a natural-language request into editable, multi-file React applications. The system streams Gemini's output through an XML-like artifact parser, updates a virtual filesystem, and runs the generated app inside the browser using WebContainers.
 
 This is an **original educational project inspired by the category of tools such as Bolt.new**, not a copy of their source or a production-equivalent replacement.
+
+## The new, simpler interface
+
+- **Home page:** describe an app or choose an example.
+- **Workspace:** AI chat, editable code, and live preview in clear sections.
+- **Advanced controls:** logs, import/export and reset stay available without cluttering the home screen.
+
+Start with the [simple Buildora walkthrough](docs/BUILDORA_SIMPLE_GUIDE.md) before reading the full architecture docs.
 
 ## What works
 
@@ -52,10 +60,10 @@ Open **http://localhost:5173**. The API runs privately at `127.0.0.1:3001` and i
 
 ### First demo (no key)
 
-1. Leave the mode on **Demo · no API key**.
+1. On the home page, leave the mode on **Demo (no key)**.
 2. Click **Task manager** or type "make a task manager" and press Enter.
-3. Watch the source files appear/update in **Explorer**.
-4. Click **Run project** in the preview pane. The browser installs dependencies and launches Vite. The first run requires network access and may take some time.
+3. The workspace opens and shows the generated source files in **Code editor**.
+4. Click **Run app** in the preview pane. The browser installs dependencies and launches Vite. The first run requires network access and may take some time.
 5. Toggle a task in the preview, then change a CSS color in `src/styles.css` and watch Vite HMR update the running app.
 6. Click **Export code** to download a standalone Vite source project.
 
@@ -69,7 +77,7 @@ Put `GEMINI_API_KEY` in `.env`, **restart the backend** (`npm run dev`), select 
 
 ### Update from the earlier Claude version
 
-If you previously downloaded PromptForge, extract this Gemini edition to a **new folder** (or back up the old folder first). Do not just paste a new key into the old project: the original backend calls Anthropic, not Google. Your existing workspace is stored locally by the browser under the same localhost origin and may still appear; use the **Reset** action if you want a clean project.
+If you previously downloaded Buildora, extract this Gemini edition to a **new folder** (or back up the old folder first). Do not just paste a new key into the old project: the original backend calls Anthropic, not Google. Your existing workspace is stored locally by the browser under the same localhost origin and may still appear; use the **Reset** action if you want a clean project.
 
 ## Architecture
 
