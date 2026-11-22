@@ -34,7 +34,7 @@ function throttle(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, liveAvailable: !publicDemo && Boolean(process.env.GEMINI_API_KEY), model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' });
+  res.json({ ok: true, liveAvailable: !publicDemo && Boolean(process.env.GEMINI_API_KEY), model: process.env.GEMINI_MODEL || 'gemini-3.8-flash' });
 });
 
 app.post('/api/generate', throttle, async (req, res) => {
@@ -79,7 +79,7 @@ app.post('/api/generate', throttle, async (req, res) => {
       res.on('close', () => controller.abort());
       for await (const text of streamGeminiText({
         apiKey: process.env.GEMINI_API_KEY,
-        model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+        model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
         systemPrompt: SYSTEM_PROMPT,
         userPrompt: makeUserPrompt(prompt, files),
         signal: controller.signal,
