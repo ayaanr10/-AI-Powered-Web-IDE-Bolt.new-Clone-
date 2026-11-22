@@ -90,6 +90,7 @@ export default function App() {
   const [showInfo, setShowInfo] = useState(false);
   const [showFullPreview, setShowFullPreview] = useState(false);
   const [notification, setNotification] = useState('');
+  const [generationError, setGenerationError] = useState('');
   const [messages, setMessages] = useState([{ role: 'assistant', text: 'Hey! Describe what you want to build. I’ll turn your idea into a React app with editable files and a real browser preview.' }]);
   const scrollRef = useRef(null);
   const abortRef = useRef(null);
@@ -149,43 +150,86 @@ export default function App() {
   const generate = async (text = prompt) => {
     if (!text.trim() || busy) return;
     const request = text.trim();
+    const selectedMode = mode;
+    const modeName = selectedMode === 'live' ? 'Gemini AI' : 'Demo';
     setScreen('workspace');
-    setPrompt(''); setBusy(true);
-    setMessages((m) => [...m, { role: 'user', text: request }, { role: 'assistant', text: 'Generating project files…', files: [] }]);
-    const controller = new AbortController(); abortRef.current = controller;
+    setPrompt('');
+    setBusy(true);
+    setGenerationError('');
+    setMessages((old) => [
+      ...old,
+      { role: 'user', text: request },
+      { role: 'assistant', text: `Generating with ${modeName}…`, files: [] },
+    ]);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
     const parser = new StreamingArtifactParser();
+    const pendingActions = [];
     let responseMessage = '';
-    const changed = [];
+
     try {
-      let gotDone = false;
-      for await (const event of generateStream({ prompt: request, files: filesRef.current, mode, signal: controller.signal })) {
+      let finished = false;
+      for await (const event of generateStream({
+        prompt: request,
+        files: filesRef.current,
+        mode: selectedMode,
+        signal: controller.signal,
+      })) {
         if (event.type === 'error') throw new Error(event.message);
-        if (event.type === 'done') { gotDone = true; break; }
+        if (event.type === 'done') { finished = true; break; }
         if (event.type !== 'chunk') continue;
-        const actions = parser.push(event.text);
-        for (const action of actions) {
-          if (action.type === 'message') responseMessage = action.content;
-          else {
-            setFiles((old) => {
-              const next = { ...old };
-              if (action.type === 'file') next[action.path] = action.content;
-              else delete next[action.path];
-              try { validateFiles(next); return next; } catch (err) { setNotification(err.message); return old; }
-            });
-            changed.push(action.path);
+
+        for (const action of parser.push(event.text)) {
+          if (action.type === 'message') {
+            responseMessage = action.content;
+          } else {
+            // Don't change the previous working app until generation succeeds.
+            pendingActions.push(action);
           }
         }
-        setMessages((m) => [...m.slice(0, -1), { role: 'assistant', text: responseMessage || 'Writing application files…', files: [...changed] }]);
+        setMessages((old) => [
+          ...old.slice(0, -1),
+          { role: 'assistant', text: responseMessage || `${modeName} is writing files…` },
+        ]);
       }
-      if (!gotDone) throw new Error('Stream disconnected before completion.');
+
+      if (!finished) throw new Error('The generation connection closed before completion.');
       parser.finish();
-      if (changed.length) setActiveFile(changed.find((p) => p.endsWith('.jsx')) || changed[0]);
-      setMessages((m) => [...m.slice(0, -1), { role: 'assistant', text: responseMessage || `Updated ${changed.length} files.`, files: changed }]);
-      setNotification(`Generated ${changed.length} file(s). ${wc.status === 'ready' ? 'Live preview will update.' : 'Click Run app to preview.'}`);
+      if (!pendingActions.length) throw new Error('No project files were generated. Try a more specific request.');
+
+      const updated = { ...filesRef.current };
+      for (const action of pendingActions) {
+        if (action.type === 'file') updated[action.path] = action.content;
+        if (action.type === 'delete') delete updated[action.path];
+      }
+      validateFiles(updated);
+      const changed = [...new Set(pendingActions.map((action) => action.path))];
+
+      setFiles(updated);
+      setActiveFile(changed.find((path) => path.endsWith('.jsx')) || changed[0]);
+      setMessages((old) => [
+        ...old.slice(0, -1),
+        {
+          role: 'assistant',
+          text: `${modeName}: ${responseMessage || `Updated ${changed.length} file(s).`}`,
+          files: changed,
+        },
+      ]);
+      setNotification(`${modeName} generated ${changed.length} file(s). ${wc.status === 'ready' ? 'Preview will update.' : 'Click Run app to preview.'}`);
     } catch (err) {
       const cancelled = err.name === 'AbortError';
-      setMessages((m) => [...m.slice(0, -1), { role: 'assistant', text: cancelled ? 'Generation stopped. Completed files were kept.' : `Generation error: ${err.message}`, files: changed }]);
-    } finally { abortRef.current = null; setBusy(false); }
+      const detail = cancelled ? 'Generation stopped.' : (err.message || 'Unknown generation error.');
+      setGenerationError(detail);
+      setMessages((old) => [
+        ...old.slice(0, -1),
+        { role: 'assistant', text: `${modeName} failed: ${detail} Previous app was kept unchanged.`, files: [] },
+      ]);
+      setNotification('Generation did not finish. The previous app was kept; see the error above.');
+    } finally {
+      abortRef.current = null;
+      setBusy(false);
+    }
   };
   const lastReply = [...messages].reverse().find((message) => message.role === 'assistant');
   const fileCount = Object.keys(files).length;
@@ -259,7 +303,7 @@ export default function App() {
               </div>
             </form>
             <div className="generation-status" role="status">
-              {busy ? <><LoaderCircle size={15} className="spinning"/> Creating files… <button onClick={() => abortRef.current?.abort()}>Stop</button></> : <><Check size={15}/> {lastReply?.text || 'Ready to build.'}</>}
+              {busy ? <><LoaderCircle size={15} className="spinning"/> Generating with {mode === 'live' ? 'Gemini AI' : 'Demo'}… <button onClick={() => abortRef.current?.abort()}>Stop</button></> : generationError ? <><CircleHelp size={15} color="#bf3d3d"/> <span className="generation-error">{generationError} — previous app kept unchanged.</span></> : <><Check size={15}/> {lastReply?.text || 'Ready to build.'}</>}
               <details className="activity-details"><summary>Activity</summary><div className="activity-log" ref={scrollRef}>{messages.map((message,index) => <ChatMessage key={index} message={message}/>)}</div></details>
             </div>
           </section>
