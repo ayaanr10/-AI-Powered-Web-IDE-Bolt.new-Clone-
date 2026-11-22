@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
+      - run: NODE_ENV=production npm install --include=dev --no-audit --no-fund
       - run: npm run check
       - name: Smoke test production web service
         run: |
