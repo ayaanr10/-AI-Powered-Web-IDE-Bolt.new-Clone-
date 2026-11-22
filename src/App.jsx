@@ -212,7 +212,7 @@ export default function App() {
       <form className="home-composer" onSubmit={(event) => { event.preventDefault(); generate(); }}>
         <textarea aria-label="Describe your app idea" placeholder="Build a personal portfolio with an About section, projects and a contact form..." value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }} rows={4}/>
         <div className="composer-bottom">
-          <label className="mode-control"><span>Mode</span><select aria-label="Generation mode" value={mode} onChange={(e) => setMode(e.target.value)}><option value="demo">Demo (no key)</option><option value="live">Gemini AI {!liveAvailable ? '(setup needed)' : ''}</option></select></label>
+          <label className="mode-control"><span>Mode</span><select aria-label="Generation mode" value={mode} onChange={(e) => setMode(e.target.value)}><option value="demo">Demo (no key)</option><option value="live" disabled={!liveAvailable}>Gemini AI {!liveAvailable ? '(available when configured locally)' : ''}</option></select></label>
           <button className="primary-action" type="submit" disabled={!prompt.trim() || busy}>Generate app <ArrowRight size={16}/></button>
         </div>
       </form>
@@ -237,7 +237,7 @@ export default function App() {
           <form className="studio-composer" onSubmit={(event) => { event.preventDefault(); generate(); }}>
             <textarea aria-label="Ask Buildora to change your app" placeholder="Add a dark mode toggle..." rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }}/>
             <div className="composer-bottom">
-              <select aria-label="Generation mode" value={mode} onChange={(e) => setMode(e.target.value)}><option value="demo">Demo</option><option value="live">Gemini AI</option></select>
+              <select aria-label="Generation mode" value={mode} onChange={(e) => setMode(e.target.value)}><option value="demo">Demo</option><option value="live" disabled={!liveAvailable}>Gemini AI {!liveAvailable ? '(local setup)' : ''}</option></select>
               <button className="primary-action" type="submit" disabled={busy || !prompt.trim()}>{busy ? 'Creating...' : 'Generate'} <ArrowUp size={15}/></button>
             </div>
           </form>
