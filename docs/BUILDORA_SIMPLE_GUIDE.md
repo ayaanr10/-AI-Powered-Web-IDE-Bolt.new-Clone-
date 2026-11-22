@@ -7,7 +7,7 @@ Buildora is an educational AI-powered web IDE. A user describes an app in Englis
 ## The two screens
 
 1. **Home:** one prompt box, three example ideas, and a Demo/Gemini mode switch.
-2. **Workspace:** AI chat on the left, editable project files in the middle, and the running app preview on the right. Import, export, logs, and reset are secondary controls.
+2. **Workspace:** a file sidebar on the left, a prompt box at the top, and two white panels for editable code and live preview. The Activity dropdown reveals AI responses. Import, export, logs, and reset stay secondary controls.
 
 The home/workspace switch is one ordinary React state variable in `src/App.jsx`:
 
@@ -33,9 +33,10 @@ When a user generates an app, `generate()` changes that state to `workspace`. Th
 ## What is intentionally simple?
 
 - Plain React components and `useState`, not a global state-management library.
-- One CSS stylesheet, not a UI framework or design system.
+- One white-and-blue CSS stylesheet, not a UI framework or design system.
 - The UI redesign changes presentation without replacing generation, storage, or the runtime.
 - A clear, manual **Run app** button so users understand when the preview starts.
+- No fake Share, Deploy, Components, or Templates buttons: visible actions actually perform a function.
 
 ## Important honesty points
 
