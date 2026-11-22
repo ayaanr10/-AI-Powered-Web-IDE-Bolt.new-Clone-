@@ -73,7 +73,7 @@ function Indicator({ status }) {
 function ChatMessage({ message }) {
   return <div className={'chat-message ' + message.role}>
     <div className="message-avatar">{message.role === 'user' ? 'Y' : <Sparkles size={15}/>}</div>
-    <div className="message-main"><div className="message-name">{message.role === 'user' ? 'You' : 'PromptForge AI'}{message.role !== 'user' && <span>ASSISTANT</span>}</div><div className="message-content">{message.text}</div>{message.files?.length > 0 && <div className="generated-files"><Check size={12}/>{message.files.length} file(s) updated <span>{message.files.slice(0, 3).map((p) => p.split('/').at(-1)).join(', ')}</span></div>}</div>
+    <div className="message-main"><div className="message-name">{message.role === 'user' ? 'You' : 'Buildora AI'}{message.role !== 'user' && <span>ASSISTANT</span>}</div><div className="message-content">{message.text}</div>{message.files?.length > 0 && <div className="generated-files"><Check size={12}/>{message.files.length} file(s) updated <span>{message.files.slice(0, 3).map((p) => p.split('/').at(-1)).join(', ')}</span></div>}</div>
   </div>;
 }
 
@@ -81,7 +81,6 @@ export default function App() {
   const [files, setFiles] = useState(loadFiles);
   const filesRef = useRef(files);
   const [activeFile, setActiveFile] = useState('src/App.jsx');
-  const [view, setView] = useState('preview');
   const [screen, setScreen] = useState('home');
   const [mode, setMode] = useState('demo');
   const [liveAvailable, setLiveAvailable] = useState(false);
@@ -97,16 +96,6 @@ export default function App() {
   const wc = useWebContainer();
 
   useEffect(() => { filesRef.current = files; try { localStorage.setItem(STORAGE_KEY, JSON.stringify(files)); } catch { /* storage full */ } }, [files]);
-  useEffect(() => {
-    const handler = (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-        event.preventDefault();
-        document.querySelector('.composer .send-button')?.click();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
   useEffect(() => { fetch('/api/health').then((r) => r.json()).then((d) => setLiveAvailable(Boolean(d.liveAvailable))).catch(() => {}); }, []);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [messages, busy]);
   useEffect(() => {
@@ -140,7 +129,7 @@ export default function App() {
     if (!window.confirm('Reset your workspace to the original starter app? Your current files will be replaced.')) return;
     abortRef.current?.abort();
     setFiles({ ...seedProject }); setActiveFile('src/App.jsx'); setMessages([{ role: 'assistant', text: 'Workspace reset. You’re ready for a new idea.' }]);
-    setNotification('Starter project restored. Click Restart to refresh the browser runtime.');
+    setNotification('Starter project restored. Click Run app to refresh the preview.');
   };
   const importProject = async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -183,12 +172,13 @@ export default function App() {
       parser.finish();
       if (changed.length) setActiveFile(changed.find((p) => p.endsWith('.jsx')) || changed[0]);
       setMessages((m) => [...m.slice(0, -1), { role: 'assistant', text: responseMessage || `Updated ${changed.length} files.`, files: changed }]);
-      setNotification(`Generated ${changed.length} file(s). ${wc.status === 'ready' ? 'Live preview will update.' : 'Click Run project to preview.'}`);
+      setNotification(`Generated ${changed.length} file(s). ${wc.status === 'ready' ? 'Live preview will update.' : 'Click Run app to preview.'}`);
     } catch (err) {
       const cancelled = err.name === 'AbortError';
       setMessages((m) => [...m.slice(0, -1), { role: 'assistant', text: cancelled ? 'Generation stopped. Completed files were kept.' : `Generation error: ${err.message}`, files: changed }]);
     } finally { abortRef.current = null; setBusy(false); }
   };
+  const lastReply = [...messages].reverse().find((message) => message.role === 'assistant');
   const fileCount = Object.keys(files).length;
   const statusText = { idle: 'Run to launch the app', booting: 'Booting Node.js', installing: 'Installing packages', starting: 'Starting Vite', ready: 'Application is live', error: 'Check terminal for details' }[wc.status];
 
@@ -197,72 +187,102 @@ export default function App() {
       <button className="brand-link" onClick={() => setScreen('home')} title="Buildora home">
         <span className="brand-mark"><Braces size={20}/></span><span>buildora<span className="brand-accent">.</span></span>
       </button>
-      <span className="header-description">AI-powered web IDE</span>
-      <div className="header-actions">
-        {screen === 'workspace' && <button className="quiet-button" onClick={() => setScreen('home')}><Plus size={16}/> New idea</button>}
-        <button className="quiet-button" onClick={() => setShowInfo(true)}><CircleHelp size={16}/> About</button>
+      <span className=  return <div className="buildora">
+    <header className="site-header">
+      <button className="site-brand" onClick={() => setScreen('home')} aria-label="Buildora home">
+        <span className="brand-symbol"><Braces size={22} strokeWidth={2.7}/></span>
+        <span>Buildora<span className="brand-dot">.</span></span>
+      </button>
+      <span className="header-subtitle">AI-powered web IDE</span>
+      <div className="header-right">
+        {screen === 'workspace' && <>
+          <span className="project-name"><Layers3 size={15}/> My project</span>
+          <button className="light-button" onClick={() => importRef.current?.click()}><Upload size={15}/> Import</button>
+          <button className="light-button" onClick={() => downloadZip(files)}><Download size={15}/> Export code</button>
+          <button className="blue-button" onClick={() => wc.run(filesRef.current)} disabled={['booting','installing','starting'].includes(wc.status)}><Play size={15}/> {['booting','installing','starting'].includes(wc.status) ? 'Starting' : wc.status === 'ready' ? 'Restart' : 'Run app'}</button>
+        </>}
+        <button className="header-help" title="About Buildora" aria-label="About Buildora" onClick={() => setShowInfo(true)}><CircleHelp size={19}/></button>
       </div>
     </header>
 
-    {screen === 'home' ? <main className="welcome-page">
-      <div className="welcome-eyebrow"><Sparkles size={15}/> BUILDORA STUDIO</div>
-      <h1>From idea to <span>running application.</span></h1>
-      <p className="welcome-description">Describe a website or app you want to build. Buildora creates editable React files that you can run and explore.</p>
-
-      <form className="home-composer" onSubmit={(event) => { event.preventDefault(); generate(); }}>
-        <textarea aria-label="Describe your app idea" placeholder="Build a personal portfolio with an About section, projects and a contact form..." value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }} rows={4}/>
-        <div className="composer-bottom">
-          <label className="mode-control"><span>Mode</span><select aria-label="Generation mode" value={mode} onChange={(e) => setMode(e.target.value)}><option value="demo">Demo (no key)</option><option value="live" disabled={!liveAvailable}>Gemini AI {!liveAvailable ? '(available when configured locally)' : ''}</option></select></label>
-          <button className="primary-action" type="submit" disabled={!prompt.trim() || busy}>Generate app <ArrowRight size={16}/></button>
-        </div>
-      </form>
-      <div className="example-section"><span>OR TRY AN EXAMPLE</span><div className="example-buttons">{suggested.map((item) => <button key={item.title} className="example-button" onClick={() => generate(item.prompt)} disabled={busy}>{item.title} <ArrowUp size={14}/></button>)}</div></div>
-      <div className="welcome-steps"><div><span>01</span><strong>Describe an idea</strong><small>Write what you want in plain English.</small></div><div><span>02</span><strong>Generate your code</strong><small>See React files created automatically.</small></div><div><span>03</span><strong>Run and edit</strong><small>Preview the app and change its code.</small></div></div>
-      <button className="existing-project" onClick={() => setScreen('workspace')}><Code2 size={16}/> Open existing workspace <ArrowRight size={15}/></button>
-    </main> : <main className="studio-page">
-      <div className="studio-heading">
-        <div><span className="studio-eyebrow">YOUR WORKSPACE</span><h1>Build your next idea.</h1><p>Ask Buildora to make changes, edit the code, or run your app.</p></div>
-        <div className="studio-actions">
-          <button className="quiet-button" onClick={() => importRef.current?.click()}><Upload size={15}/> Import</button>
-          <button className="quiet-button" onClick={() => downloadZip(files)}><Download size={15}/> Export code</button>
-        </div>
-      </div>
-      <div className="studio-grid">
-        <section className="studio-panel assistant-panel">
-          <div className="simple-panel-title"><div><Sparkles size={18}/><strong>Build with AI</strong></div><span className="small-label">{mode === 'demo' ? 'Demo mode' : 'Gemini AI'}</span></div>
-          <div className="conversation-list" ref={scrollRef}>
-            {messages.map((message, index) => <ChatMessage key={index} message={message}/>)}
-            {busy && <div className="progress-note"><LoaderCircle size={15} className="spinning"/> Creating your app... <button onClick={() => abortRef.current?.abort()}>Stop</button></div>}
-          </div>
-          <form className="studio-composer" onSubmit={(event) => { event.preventDefault(); generate(); }}>
-            <textarea aria-label="Ask Buildora to change your app" placeholder="Add a dark mode toggle..." rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } }}/>
-            <div className="composer-bottom">
-              <select aria-label="Generation mode" value={mode} onChange={(e) => setMode(e.target.value)}><option value="demo">Demo</option><option value="live" disabled={!liveAvailable}>Gemini AI {!liveAvailable ? '(local setup)' : ''}</option></select>
-              <button className="primary-action" type="submit" disabled={busy || !prompt.trim()}>{busy ? 'Creating...' : 'Generate'} <ArrowUp size={15}/></button>
+    {screen === 'home' ?
+      <main className="home-layout">
+        <aside className="home-sidebar">
+          <div className="sidebar-label">WORKSPACE</div>
+          <button className="sidebar-button selected" onClick={() => { setPrompt(''); setScreen('home'); }}><Plus size={17}/> New project</button>
+          <button className="sidebar-button" onClick={() => setScreen('workspace')}><Code2 size={17}/> Open workspace</button>
+          <div className="sidebar-label examples-label">GET STARTED</div>
+          {suggested.map((item) => <button key={item.title} className="sidebar-button template-link" onClick={() => generate(item.prompt)} disabled={busy}><Sparkles size={15}/> {item.title}</button>)}
+          <div className="sidebar-tip"><ShieldCheck size={17}/><span>Projects are saved in this browser.</span></div>
+        </aside>
+        <section className="home-center">
+          <div className="home-eyebrow"><Sparkles size={15}/> BUILT FOR IDEAS</div>
+          <h1>What should we <span>build today?</span></h1>
+          <p className="home-description">Describe your idea. Buildora turns it into editable React code with a real browser preview.</p>
+          <form className="home-prompt" onSubmit={(event) => { event.preventDefault(); generate(); }}>
+            <textarea aria-label="Describe what you want to build" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask Buildora to build a portfolio, task manager, landing page..." rows={4} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); generate(); } }}/>
+            <div className="home-prompt-footer">
+              <label className="mode-picker"><Sparkles size={14}/><select aria-label="AI generation mode" value={mode} onChange={(event) => setMode(event.target.value)}><option value="demo">Demo (no key needed)</option><option value="live" disabled={!liveAvailable}>Gemini AI {!liveAvailable ? '(local setup required)' : ''}</option></select><ChevronDown size={13}/></label>
+              <button className="blue-button" type="submit" disabled={busy || !prompt.trim()}>Build now <ArrowRight size={16}/></button>
             </div>
           </form>
+          <div className="home-examples"><span>Try an example</span><div>{suggested.map((item) => <button key={item.title} onClick={() => generate(item.prompt)} disabled={busy}>{item.title} <ArrowUp size={13}/></button>)}</div></div>
+          <div className="home-footnote"><Check size={16}/> Edit the code <span/> <Check size={16}/> Run a preview <span/> <Check size={16}/> Export your project</div>
         </section>
-        <section className="studio-panel editor-panel">
-          <div className="simple-panel-title"><div><Code2 size={18}/><strong>Code editor</strong></div><span className="small-label">{fileCount} files</span></div>
-          <div className="editor-workarea">
-            <nav className="simple-files" aria-label="Project files"><div className="files-heading"><span>FILES</span><button onClick={addFile} aria-label="Add file" title="Add file"><FilePlus2 size={17}/></button></div><TreeBranch tree={tree} activeFile={activeFile} onSelect={setActiveFile}/></nav>
-            <div className="simple-editor"><div className="editor-file-heading"><span>{fileIcon(activeFile)} {activeFile}</span><button className="icon-only" onClick={removeFile} title="Delete selected file" aria-label="Delete file"><Trash2 size={15}/></button></div><div className="editor-code"><CodeMirror key={activeFile} value={files[activeFile] ?? ''} height="100%" theme="dark" extensions={extensions} onChange={updateFile} basicSetup={{ foldGutter: true, highlightActiveLine: true, lineNumbers: true, autocompletion: true }}/></div></div>
+      </main>
+    :
+      <main className="workspace-layout">
+        <aside className="workspace-sidebar">
+          <button className="workspace-nav active" onClick={() => setScreen('workspace')}><FolderOpen size={18}/> Files</button>
+          <button className="workspace-nav" onClick={() => setScreen('home')}><Plus size={17}/> New idea</button>
+          <div className="workspace-sidebar-divider"/>
+          <div className="files-heading"><span>PROJECT FILES</span><button onClick={addFile} aria-label="Add a project file" title="Add a file"><Plus size={17}/></button></div>
+          <div className="project-file-tree"><TreeBranch tree={tree} activeFile={activeFile} onSelect={setActiveFile}/></div>
+          <div className="sidebar-footer"><HardDrive size={16}/> Saved locally</div>
+        </aside>
+
+        <section className="workspace-content">
+          <section className="prompt-panel">
+            <div className="section-title"><Sparkles size={19}/><h2>Prompt</h2></div>
+            <form onSubmit={(event) => { event.preventDefault(); generate(); }}>
+              <textarea aria-label="Describe what to build or change" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Build a task manager with add, complete and delete features..." rows={3} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); generate(); } }}/>
+              <div className="prompt-actions">
+                <label className="workspace-mode"><span>Mode</span><select value={mode} aria-label="Generation mode" onChange={(event) => setMode(event.target.value)}><option value="demo">Demo</option><option value="live" disabled={!liveAvailable}>Gemini AI {!liveAvailable ? '(not configured)' : ''}</option></select></label>
+                <div className="prompt-action-buttons">
+                  {suggested.slice(0, 2).map((item) => <button type="button" className="prompt-suggestion" key={item.title} onClick={() => generate(item.prompt)} disabled={busy}>+ {item.title}</button>)}
+                  <button type="submit" className="blue-button" disabled={!prompt.trim() || busy}>{busy ? <><LoaderCircle size={16} className="spinning"/> Generating</> : <><Sparkles size={16}/> Generate</>}</button>
+                </div>
+              </div>
+            </form>
+            <div className="generation-status" role="status">
+              {busy ? <><LoaderCircle size={15} className="spinning"/> Creating files… <button onClick={() => abortRef.current?.abort()}>Stop</button></> : <><Check size={15}/> {lastReply?.text || 'Ready to build.'}</>}
+              <details className="activity-details"><summary>Activity</summary><div className="activity-log" ref={scrollRef}>{messages.map((message,index) => <ChatMessage key={index} message={message}/>)}</div></details>
+            </div>
+          </section>
+
+          <div className="workspace-panels">
+            <section className="code-panel">
+              <div className="panel-title"><div><Code2 size={18}/><h2>Code</h2></div><span>{fileCount} files</span></div>
+              <div className="code-file-tab"><span>{fileIcon(activeFile)} {activeFile}</span><button onClick={removeFile} aria-label="Delete selected file" title="Delete selected file"><Trash2 size={15}/></button></div>
+              <div className="editor-surface"><CodeMirror key={activeFile} value={files[activeFile] ?? ''} height="100%" theme="light" extensions={extensions} onChange={updateFile} basicSetup={{ foldGutter: true, highlightActiveLine: true, lineNumbers: true, autocompletion: true }}/></div>
+              <div className="code-footer"><span><Check size={14}/> Autosaved locally</span><button onClick={() => setTerminalVisible(!terminalVisible)}><Terminal size={15}/>{terminalVisible ? 'Hide logs' : 'Show logs'}</button></div>
+              {terminalVisible && <div className="terminal-log">{wc.logs.map((line,index) => <div key={index}>{line}</div>)}{wc.error && <p>{wc.error}</p>}</div>}
+            </section>
+
+            <section className="preview-panel">
+              <div className="panel-title"><div><Monitor size={18}/><h2>Preview</h2></div><Indicator status={wc.status}/></div>
+              <div className="preview-controls"><span>{statusText}</span><div><button className="icon-control" onClick={() => wc.run(filesRef.current)} title="Run or restart preview" aria-label="Run or restart preview" disabled={['booting','installing','starting'].includes(wc.status)}><RefreshCw size={15}/></button><button className="icon-control" onClick={() => window.open(wc.previewUrl,'_blank','noopener,noreferrer')} disabled={!wc.previewUrl} title="Open preview in new tab" aria-label="Open preview in new tab"><ExternalLink size={15}/></button></div></div>
+              <div className="preview-surface">{wc.previewUrl ? <iframe key={wc.previewUrl} src={wc.previewUrl} title="Generated application preview" allow="cross-origin-isolated; clipboard-read; clipboard-write"/> : <div className="preview-empty"><div className="preview-placeholder-icon"><Monitor size={30}/></div><h3>{['booting','installing','starting'].includes(wc.status) ? 'Preparing your app…' : 'Your app will appear here'}</h3><p>{wc.error || 'Run your project to see the generated React app in action.'}</p><button className="blue-button" onClick={() => wc.run(filesRef.current)} disabled={['booting','installing','starting'].includes(wc.status)}><Play size={15}/>{['booting','installing','starting'].includes(wc.status) ? 'Starting…' : 'Run app'}</button></div>}</div>
+              <div className="preview-footer">Powered by React, Vite &amp; WebContainers</div>
+            </section>
           </div>
-          <div className="editor-footer"><span><Check size={13}/> Auto-saved in your browser</span><button onClick={() => setTerminalVisible(!terminalVisible)}><Terminal size={15}/> {terminalVisible ? 'Hide logs' : 'Show logs'}</button></div>
-          {terminalVisible && <div className="simple-logs">{wc.logs.map((line,index) => <div key={index}>{line}</div>)}{wc.error && <p>{wc.error}</p>}</div>}
+          <div className="workspace-bottom"><span>Buildora · Browser-based development workspace</span><button onClick={resetProject}><RotateCcw size={14}/> Reset files</button></div>
         </section>
-        <section className="studio-panel live-panel">
-          <div className="simple-panel-title"><div><Monitor size={18}/><strong>Live preview</strong></div><Indicator status={wc.status}/></div>
-          <div className="preview-actions"><span>{statusText}</span><div><button className="quiet-button" onClick={() => wc.run(filesRef.current)} disabled={['booting','installing','starting'].includes(wc.status)}><Play size={15}/> {wc.status === 'ready' ? 'Restart' : 'Run app'}</button><button className="icon-only" disabled={!wc.previewUrl} onClick={() => window.open(wc.previewUrl,'_blank','noopener,noreferrer')} aria-label="Open preview in a new tab" title="Open preview"><ExternalLink size={15}/></button></div></div>
-          <div className="simple-preview">{wc.previewUrl ? <iframe key={wc.previewUrl} src={wc.previewUrl} title="Generated application preview" allow="cross-origin-isolated; clipboard-read; clipboard-write"/> : <div className="preview-placeholder"><div className="placeholder-icon"><Monitor size={34}/></div><h2>{['booting','installing','starting'].includes(wc.status) ? 'Preparing your app...' : 'See your app here'}</h2><p>{wc.error || 'Click Run app to launch your React project in the browser.'}</p><button className="primary-action" onClick={() => wc.run(filesRef.current)} disabled={['booting','installing','starting'].includes(wc.status)}>{['booting','installing','starting'].includes(wc.status) ? 'Starting...' : 'Run app'} <ArrowRight size={16}/></button></div>}</div>
-          <div className="preview-help">The preview runs with WebContainers. The first start may need to install packages.</div>
-        </section>
-      </div>
-      <div className="studio-bottom"><span>React + Vite · Gemini or Demo · Browser preview</span><button onClick={resetProject}><RotateCcw size={13}/> Reset project</button></div>
-    </main>}
+      </main>
+    }
 
     <input ref={importRef} type="file" accept=".zip,application/zip" hidden onChange={importProject}/>
-    {notification && <div className="simple-toast" role="status"><Sparkles size={16}/>{notification}<button onClick={() => setNotification('')} aria-label="Dismiss"><X size={15}/></button></div>}
-    {showInfo && <div className="simple-overlay" onClick={() => setShowInfo(false)}><div className="simple-dialog" role="dialog" aria-modal="true" aria-label="About Buildora" onClick={(e) => e.stopPropagation()}><button className="dialog-close" onClick={() => setShowInfo(false)} aria-label="Close"><X size={18}/></button><div className="brand-mark"><Braces size={22}/></div><h2>About Buildora</h2><p>Buildora turns your idea into React source files. A small Node.js server streams demo or Gemini-generated changes, a parser updates the files, and WebContainers run the app inside your browser.</p><p>Your edits are stored locally in this browser. The Gemini API key belongs on the Node server, never in the frontend.</p><button className="primary-action" onClick={() => setShowInfo(false)}>Got it <Check size={16}/></button></div></div>}
+    {notification && <div className="app-toast" role="status"><Sparkles size={16}/><span>{notification}</span><button onClick={() => setNotification('')} aria-label="Dismiss notification"><X size={16}/></button></div>}
+    {showInfo && <div className="modal-backdrop" onClick={() => setShowInfo(false)}><div className="about-modal" role="dialog" aria-modal="true" aria-label="About Buildora" onClick={(event) => event.stopPropagation()}><button className="close-modal" onClick={() => setShowInfo(false)} title="Close dialog" aria-label="Close"><X size={20}/></button><div className="about-mark"><Braces size={24}/></div><h2>Buildora</h2><p>Describe an app, then explore its editable React files and live preview. The frontend sends requests to an Express API, which streams demo or Gemini output into our file parser.</p><p>Files are saved locally in this browser. The public site offers demo templates; Gemini requires private server configuration.</p><button className="blue-button" onClick={() => setShowInfo(false)}>Got it <Check size={16}/></button></div></div>}
   </div>;
 }
