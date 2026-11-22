@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: buildora-ide-demo
+    runtime: node
+    plan: free
+    buildCommand: npm install --no-audit --no-fund && npm run build
+    startCommand: node server/index.js
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: NODE_ENV
+        value: production
+      - key: PUBLIC_DEMO
+        value: "1"
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
