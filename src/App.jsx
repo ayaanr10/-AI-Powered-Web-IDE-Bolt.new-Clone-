@@ -82,8 +82,8 @@ export default function App() {
   const filesRef = useRef(files);
   const [activeFile, setActiveFile] = useState('src/App.jsx');
   const [screen, setScreen] = useState('home');
-  const [mode, setMode] = useState('demo');
-  const [liveAvailable, setLiveAvailable] = useState(false);
+  const [zapAvailable, setZapAvailable] = useState(false);
+  const [zapMessage, setZapMessage] = useState('Connecting to Zap...');
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
@@ -98,7 +98,18 @@ export default function App() {
   const wc = useWebContainer();
 
   useEffect(() => { filesRef.current = files; try { localStorage.setItem(STORAGE_KEY, JSON.stringify(files)); } catch { /* storage full */ } }, [files]);
-  useEffect(() => { fetch('/api/health').then((r) => r.json()).then((d) => setLiveAvailable(Boolean(d.liveAvailable))).catch(() => {}); }, []);
+  useEffect(() => {
+    fetch('/api/health')
+      .then((response) => response.json())
+      .then((data) => {
+        setZapAvailable(Boolean(data.zapAvailable));
+        setZapMessage(data.zapMessage || 'Zap is not configured on this server.');
+      })
+      .catch(() => {
+        setZapAvailable(false);
+        setZapMessage('Zap cannot connect to the server. Check that npm run dev is running.');
+      });
+  }, []);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [messages, busy]);
   useEffect(() => {
     if (!['ready', 'starting'].includes(wc.status)) return;
@@ -148,10 +159,9 @@ export default function App() {
     finally { e.target.value = ''; }
   };
   const generate = async (text = prompt) => {
-    if (!text.trim() || busy) return;
+    if (!text.trim() || busy || !zapAvailable) return;
     const request = text.trim();
-    const selectedMode = mode;
-    const modeName = selectedMode === 'live' ? 'Gemini AI' : 'Demo';
+    const modeName = 'Zap';
     setScreen('workspace');
     setPrompt('');
     setBusy(true);
@@ -173,7 +183,6 @@ export default function App() {
       for await (const event of generateStream({
         prompt: request,
         files: filesRef.current,
-        mode: selectedMode,
         signal: controller.signal,
       })) {
         if (event.type === 'error') throw new Error(event.message);
@@ -270,9 +279,10 @@ export default function App() {
           <form className="home-prompt" onSubmit={(event) => { event.preventDefault(); generate(); }}>
             <textarea aria-label="Describe what you want to build" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask Buildora to build a portfolio, task manager, landing page..." rows={4} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); generate(); } }}/>
             <div className="home-prompt-footer">
-              <label className="mode-picker"><Sparkles size={14}/><select aria-label="AI generation mode" value={mode} onChange={(event) => setMode(event.target.value)}><option value="demo">Demo (no key needed)</option><option value="live" disabled={!liveAvailable}>Gemini AI {!liveAvailable ? '(local setup required)' : ''}</option></select><ChevronDown size={13}/></label>
-              <button className="blue-button" type="submit" disabled={busy || !prompt.trim()}>Build now <ArrowRight size={16}/></button>
+              <div className="zap-connection"><Zap size={16}/><strong>Zap</strong><span className={zapAvailable ? 'zap-online' : 'zap-offline'}>{zapAvailable ? 'Ready' : 'Unavailable'}</span></div>
+              <button className="blue-button" type="submit" disabled={busy || !prompt.trim() || !zapAvailable}>Build now <ArrowRight size={16}/></button>
             </div>
+            {!zapAvailable && <p className="zap-setup-note" role="status">{zapMessage}</p>}
           </form>
           <div className="home-examples"><span>Try an example</span><div>{suggested.map((item) => <button key={item.title} onClick={() => generate(item.prompt)} disabled={busy}>{item.title} <ArrowUp size={13}/></button>)}</div></div>
           <div className="home-footnote"><Check size={16}/> Edit the code <span/> <Check size={16}/> Run a preview <span/> <Check size={16}/> Export your project</div>
@@ -294,16 +304,17 @@ export default function App() {
             <div className="section-title"><Sparkles size={19}/><h2>Prompt</h2></div>
             <form onSubmit={(event) => { event.preventDefault(); generate(); }}>
               <textarea aria-label="Describe what to build or change" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Build a task manager with add, complete and delete features..." rows={3} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); generate(); } }}/>
+              {!zapAvailable && <p className="zap-setup-note" role="status">{zapMessage}</p>}
               <div className="prompt-actions">
-                <label className="workspace-mode"><span>Mode</span><select value={mode} aria-label="Generation mode" onChange={(event) => setMode(event.target.value)}><option value="demo">Demo</option><option value="live" disabled={!liveAvailable}>Gemini AI {!liveAvailable ? '(not configured)' : ''}</option></select></label>
+                <div className="zap-connection"><Zap size={16}/><strong>Zap</strong><span className={zapAvailable ? 'zap-online' : 'zap-offline'}>{zapAvailable ? 'Ready' : 'Unavailable'}</span></div>
                 <div className="prompt-action-buttons">
                   {suggested.slice(0, 2).map((item) => <button type="button" className="prompt-suggestion" key={item.title} onClick={() => generate(item.prompt)} disabled={busy}>+ {item.title}</button>)}
-                  <button type="submit" className="blue-button" disabled={!prompt.trim() || busy}>{busy ? <><LoaderCircle size={16} className="spinning"/> Generating</> : <><Sparkles size={16}/> Generate</>}</button>
+                  <button type="submit" className="blue-button" disabled={!prompt.trim() || busy || !zapAvailable}>{busy ? <><LoaderCircle size={16} className="spinning"/> Generating</> : <><Sparkles size={16}/> Generate</>}</button>
                 </div>
               </div>
             </form>
             <div className="generation-status" role="status">
-              {busy ? <><LoaderCircle size={15} className="spinning"/> Generating with {mode === 'live' ? 'Gemini AI' : 'Demo'}… <button onClick={() => abortRef.current?.abort()}>Stop</button></> : generationError ? <><CircleHelp size={15} color="#bf3d3d"/> <span className="generation-error">{generationError} — previous app kept unchanged.</span></> : <><Check size={15}/> {lastReply?.text || 'Ready to build.'}</>}
+              {busy ? <><LoaderCircle size={15} className="spinning"/> Generating with Zap… <button onClick={() => abortRef.current?.abort()}>Stop</button></> : generationError ? <><CircleHelp size={15} color="#bf3d3d"/> <span className="generation-error">{generationError} — previous app kept unchanged.</span></> : <><Check size={15}/> {lastReply?.text || 'Ready to build.'}</>}
               <details className="activity-details"><summary>Activity</summary><div className="activity-log" ref={scrollRef}>{messages.map((message,index) => <ChatMessage key={index} message={message}/>)}</div></details>
             </div>
           </section>
@@ -340,6 +351,6 @@ export default function App() {
     </div>}
     <input ref={importRef} type="file" accept=".zip,application/zip" hidden onChange={importProject}/>
     {notification && <div className="app-toast" role="status"><Sparkles size={16}/><span>{notification}</span><button onClick={() => setNotification('')} aria-label="Dismiss notification"><X size={16}/></button></div>}
-    {showInfo && <div className="modal-backdrop" onClick={() => setShowInfo(false)}><div className="about-modal" role="dialog" aria-modal="true" aria-label="About Buildora" onClick={(event) => event.stopPropagation()}><button className="close-modal" onClick={() => setShowInfo(false)} title="Close dialog" aria-label="Close"><X size={20}/></button><div className="about-mark"><Braces size={24}/></div><h2>Buildora</h2><p>Describe an app, then explore its editable React files and live preview. The frontend sends requests to an Express API, which streams demo or Gemini output into our file parser.</p><p>Files are saved locally in this browser. The public site offers demo templates; Gemini requires private server configuration.</p><button className="blue-button" onClick={() => setShowInfo(false)}>Got it <Check size={16}/></button></div></div>}
+    {showInfo && <div className="modal-backdrop" onClick={() => setShowInfo(false)}><div className="about-modal" role="dialog" aria-modal="true" aria-label="About Buildora" onClick={(event) => event.stopPropagation()}><button className="close-modal" onClick={() => setShowInfo(false)} title="Close dialog" aria-label="Close"><X size={20}/></button><div className="about-mark"><Braces size={24}/></div><h2>Buildora</h2><p>Describe an app, then explore its editable React files and live preview. The frontend sends requests to an Express API. Zap uses a private server-side Gemini connection to stream source code into our file parser.</p><p>Files are saved locally in this browser. Zap requires a private API key on the server. Public generation is disabled until secure access controls are added.</p><button className="blue-button" onClick={() => setShowInfo(false)}>Got it <Check size={16}/></button></div></div>}
   </div>;
 }
