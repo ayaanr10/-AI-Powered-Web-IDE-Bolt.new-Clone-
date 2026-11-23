@@ -12,11 +12,11 @@ This is an **original educational project inspired by the category of tools such
 
 Start with the [simple Buildora walkthrough](docs/BUILDORA_SIMPLE_GUIDE.md) before reading the full architecture docs.
 
-## Deploy Buildora (public demo)
+## Deploy Buildora (public preview)
 
 **[Deploy to Render](https://render.com/deploy?repo=https://github.com/ayaanr10/-AI-Powered-Web-IDE-Bolt.new-Clone-)**
 
-This link uses the included `render.yaml` Blueprint to create a free Render web service. The public version runs in **Demo mode** (no Gemini API key, no AI API charges). It is an educational deployment, not a production-secure public AI generator.
+This link uses the included `render.yaml` Blueprint to create a free Render web service. **Zap is the only generator**. On the public Render preview, Zap requests are disabled until authentication and per-user limits are implemented; the editor, starter files, and preview still work. Do not publish an unrestricted API key.
 
 See [step-by-step Render deployment](docs/DEPLOY_RENDER.md). After Render shows **Live**, open the URL assigned to your service. The public URL is not known until you complete deployment in your Render account.
 
@@ -26,8 +26,8 @@ See [step-by-step Render deployment](docs/DEPLOY_RENDER.md). After Render shows 
 - **Streaming structured output.** Custom recursive XML-like parser that tolerates arbitrary chunk boundaries and recognizes `file`, `delete`, and `message` actions.
 - **Editable virtual filesystem.** Folder tree, source editing with syntax highlighting, new/delete files, live HMR sync, local autosave, import/export ZIP.
 - **Actual browser runtime.** WebContainers boot Node.js inside the browser, install packages, start Vite, and display the running app in an iframe; terminal shows process output.
-- **Demo mode with no account or key.** Deterministic templates (task manager + responsive landing page) exercise the **same streaming/parser/filesystem path** as Gemini.
-- **Tests and documentation.** Node built-in tests for parser boundaries, file-path safety, mount structure and demo projects.
+- **Zap-only generation.** Every generation request calls the server-side Gemini adapter. No template generation or demo-mode fallback.
+- **Tests and documentation.** Node built-in tests for parser boundaries, file-path safety, server validation, and Gemini adapter retries.
 
 **Scope:** A usable local **MVP**, not all of Bolt.new. This does not include collaboration, authentication, production-grade hosting, command-running AI agents, cloud persistence, billing, or an audited sandbox. Preview uses the browser-native WebContainers runtime, not a remotely hosted VM.
 
@@ -48,7 +48,7 @@ cp .env.example .env
 # Copy-Item .env.example .env
 ```
 
-For **demo mode**, leave `GEMINI_API_KEY` blank. For **real Gemini generation**, paste your own Google AI Studio API key in `.env`:
+For **Zap generation**, put your private Google AI Studio API key in your local `.env` file:
 
 ```dotenv
 GEMINI_API_KEY=your_key_here
@@ -66,18 +66,17 @@ npm run dev
 
 Open **http://localhost:5173**. The API runs privately at `127.0.0.1:3001` and is proxied by Vite.
 
-### First demo (no key)
+### First local Zap run
 
-1. On the home page, leave the mode on **Demo (no key)**.
-2. Click **Task manager** or type "make a task manager" and press Enter.
-3. The workspace opens and shows the generated source files in **Code editor**.
-4. Click **Run app** in the preview pane. The browser installs dependencies and launches Vite. The first run requires network access and may take some time.
-5. Toggle a task in the preview, then change a CSS color in `src/styles.css` and watch Vite HMR update the running app.
-6. Click **Export code** to download a standalone Vite source project.
+1. Run `npm run dev` and open `http://localhost:5173`.
+2. The generation badge says **Zap · Ready** when the local server detects the API key. If it says **Unavailable**, check the private `.env` and restart.
+3. Describe an app such as "Build a restaurant website with a menu and reservation form" and press **Build now**. The backend calls the Gemini API through **Zap**; it never sends the key to the browser.
+4. Check the generated source in **Code**, then click **Run app**. The browser installs dependencies and launches the generated React app in the preview.
+5. Edit `src/styles.css` and see live changes, or choose **Export code** to download source files.
 
-### Live AI generation
+### Updating generated apps
 
-Put `GEMINI_API_KEY` in `.env`, **restart the backend** (`npm run dev`), select **Gemini · Live AI**, and request an app. The backend sends the current (bounded) workspace files to Gemini as context and streams structured changes back. You can ask follow-up prompts such as "Make the hero section violet"; files not mentioned in the response are preserved.
+Ask Zap for a follow-up change such as "Make the hero section violet". It sends current source files as context, and the parser applies valid changes only after the response completes. Files not mentioned in the response remain unchanged.
 
 **Note:** After switching `.env`, stop and restart `npm run dev`; the front-end model label does not change until the page refreshes.
 
@@ -95,8 +94,7 @@ React interface (Vite localhost:5173)
         ▲                                  │
         │ NDJSON chunks                    ▼
         │                         Express API (port 3001)
-        │                           ├─ Demo generator (no key)
-        │                           └─ Gemini streaming REST adapter (Gemini + key)
+        │                           └─ Zap generator (private Gemini REST adapter + key)
         ▼
 StreamingArtifactParser  →  file/delete/message actions
         │
@@ -144,7 +142,6 @@ Parser notes: The outer artifact can nest child tags. `parseXmlTree` is **recurs
 | `server/index.js` | Express routes, request validation, rate limiting, NDJSON transport |
 | `server/gemini.js` | Provider adapter: Gemini SSE streaming, errors, and aborts |
 | `server/prompts.js` | System protocol prompt and bounded workspace context |
-| `server/demo.js` | Fully editable demo apps using the same protocol |
 | `shared/artifact-parser.js` | Recursive parser + incremental action extraction |
 | `shared/filesystem.js` | VFS, path protection, size limits, mount conversion |
 | `shared/seed-project.js` | Starter React + Vite project |
@@ -155,7 +152,7 @@ Parser notes: The outer artifact can nest child tags. `parseXmlTree` is **recurs
 
 ```bash
 npm run dev       # API + Vite dev server
-npm run test      # parser, filesystem, demo and Gemini adapter tests
+npm run test      # parser, filesystem, server and Gemini adapter tests
 npm run build     # production frontend build
 npm run check     # tests + build
 npm run preview   # Vite frontend preview (API must be running separately)
