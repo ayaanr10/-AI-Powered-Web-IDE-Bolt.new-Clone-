@@ -269,7 +269,7 @@ export default function App() {
           <button className="sidebar-button selected" onClick={() => { setPrompt(''); setScreen('home'); }}><Plus size={17}/> New project</button>
           <button className="sidebar-button" onClick={() => setScreen('workspace')}><Code2 size={17}/> Open workspace</button>
           <div className="sidebar-label examples-label">GET STARTED</div>
-          {suggested.map((item) => <button key={item.title} className="sidebar-button template-link" onClick={() => generate(item.prompt)} disabled={busy}><Sparkles size={15}/> {item.title}</button>)}
+          {suggested.map((item) => <button key={item.title} className="sidebar-button template-link" onClick={() => generate(item.prompt)} disabled={busy || !zapAvailable}><Sparkles size={15}/> {item.title}</button>)}
           <div className="sidebar-tip"><ShieldCheck size={17}/><span>Projects are saved in this browser.</span></div>
         </aside>
         <section className="home-center">
@@ -284,7 +284,7 @@ export default function App() {
             </div>
             {!zapAvailable && <p className="zap-setup-note" role="status">{zapMessage}</p>}
           </form>
-          <div className="home-examples"><span>Try an example</span><div>{suggested.map((item) => <button key={item.title} onClick={() => generate(item.prompt)} disabled={busy}>{item.title} <ArrowUp size={13}/></button>)}</div></div>
+          <div className="home-examples"><span>Try an example</span><div>{suggested.map((item) => <button key={item.title} onClick={() => generate(item.prompt)} disabled={busy || !zapAvailable}>{item.title} <ArrowUp size={13}/></button>)}</div></div>
           <div className="home-footnote"><Check size={16}/> Edit the code <span/> <Check size={16}/> Run a preview <span/> <Check size={16}/> Export your project</div>
         </section>
       </main>
@@ -308,7 +308,7 @@ export default function App() {
               <div className="prompt-actions">
                 <div className="zap-connection"><Zap size={16}/><strong>Zap</strong><span className={zapAvailable ? 'zap-online' : 'zap-offline'}>{zapAvailable ? 'Ready' : 'Unavailable'}</span></div>
                 <div className="prompt-action-buttons">
-                  {suggested.slice(0, 2).map((item) => <button type="button" className="prompt-suggestion" key={item.title} onClick={() => generate(item.prompt)} disabled={busy}>+ {item.title}</button>)}
+                  {suggested.slice(0, 2).map((item) => <button type="button" className="prompt-suggestion" key={item.title} onClick={() => generate(item.prompt)} disabled={busy || !zapAvailable}>+ {item.title}</button>)}
                   <button type="submit" className="blue-button" disabled={!prompt.trim() || busy || !zapAvailable}>{busy ? <><LoaderCircle size={16} className="spinning"/> Generating</> : <><Sparkles size={16}/> Generate</>}</button>
                 </div>
               </div>
