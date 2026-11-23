@@ -16,7 +16,7 @@ jobs:
       - run: npm run check
       - name: Smoke test production web service
         run: |
-          NODE_ENV=production PUBLIC_DEMO=1 PORT=37891 node server/index.js > /tmp/buildora-server.log 2>&1 &
+          NODE_ENV=production PUBLIC_ZAP_ENABLED=0 PORT=37891 node server/index.js > /tmp/buildora-server.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for i in $(seq 1 20); do
@@ -24,7 +24,7 @@ jobs:
             sleep 1
           done
           grep -q '"ok":true' /tmp/buildora-health.json
-          grep -q '"liveAvailable":false' /tmp/buildora-health.json
+          grep -q '"zapAvailable":false' /tmp/buildora-health.json
           curl -fsS -D /tmp/buildora-headers http://127.0.0.1:37891/ -o /tmp/buildora-home.html
           grep -q 'Buildora' /tmp/buildora-home.html
           grep -qi '^cross-origin-opener-policy: same-origin' /tmp/buildora-headers
