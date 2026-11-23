@@ -12,7 +12,8 @@ services:
         value: 22.16.0
       - key: NODE_ENV
         value: production
-      - key: PUBLIC_DEMO
-        value: "1"
+      # Keep public AI generation off until authentication and spending limits exist.
+      - key: PUBLIC_ZAP_ENABLED
+        value: "0"
       - key: GEMINI_MODEL
         value: gemini-3.8-flash
