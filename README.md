@@ -16,7 +16,7 @@ Start with the [simple Buildora walkthrough](docs/BUILDORA_SIMPLE_GUIDE.md) befo
 
 **[Deploy to Render](https://render.com/deploy?repo=https://github.com/ayaanr10/-AI-Powered-Web-IDE-Bolt.new-Clone-)**
 
-This link uses the included `render.yaml` Blueprint to create a free Render web service. **Zap is the only generator**. On the public Render preview, Zap requests are disabled until authentication and per-user limits are implemented; the editor, starter files, and preview still work. Do not publish an unrestricted API key.
+This link uses the included `render.yaml` Blueprint to create a free Render web service. **Zap is the only generator**. On the public Render preview, Zap stays disabled by default; editing and preview still work. You can optionally enable a **private access-code-protected Zap demo** with Render environment variables. Do not expose your Gemini key or access code.
 
 See [step-by-step Render deployment](docs/DEPLOY_RENDER.md). After Render shows **Live**, open the URL assigned to your service. The public URL is not known until you complete deployment in your Render account.
 

@@ -70,6 +70,15 @@ function Indicator({ status }) {
   const [tone, label] = map[status] || map.idle;
   return <span className={'status-chip ' + tone}><span className="status-dot"/>{label}</span>;
 }
+// The access code lives only in React memory, not localStorage.
+function ZapAccessField({ value, onChange }) {
+  return <label className="zap-access-field">
+    <ShieldCheck size={17}/>
+    <span>Private Zap access code</span>
+    <input type="password" autoComplete="off" placeholder="Enter your code"
+      value={value} onChange={(event) => onChange(event.target.value)} />
+  </label>;
+}
 function ChatMessage({ message }) {
   return <div className={'chat-message ' + message.role}>
     <div className="message-avatar">{message.role === 'user' ? 'Y' : <Sparkles size={15}/>}</div>
@@ -83,6 +92,8 @@ export default function App() {
   const [activeFile, setActiveFile] = useState('src/App.jsx');
   const [screen, setScreen] = useState('home');
   const [zapAvailable, setZapAvailable] = useState(false);
+  const [zapProtected, setZapProtected] = useState(false);
+  const [zapAccessCode, setZapAccessCode] = useState('');
   const [zapMessage, setZapMessage] = useState('Connecting to Zap...');
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
@@ -103,6 +114,7 @@ export default function App() {
       .then((response) => response.json())
       .then((data) => {
         setZapAvailable(Boolean(data.zapAvailable));
+        setZapProtected(Boolean(data.zapProtected));
         setZapMessage(data.zapMessage || 'Zap is not configured on this server.');
       })
       .catch(() => {
@@ -158,8 +170,11 @@ export default function App() {
     catch (err) { setNotification(`Import failed: ${err.message}`); }
     finally { e.target.value = ''; }
   };
+  const canUseZap = zapAvailable && (!zapProtected || Boolean(zapAccessCode.trim()));
+  const zapStatus = !zapAvailable ? 'Unavailable' : zapProtected
+    ? (zapAccessCode.trim() ? 'Code entered' : 'Locked') : 'Ready';
   const generate = async (text = prompt) => {
-    if (!text.trim() || busy || !zapAvailable) return;
+    if (!text.trim() || busy || !canUseZap) return;
     const request = text.trim();
     // Zap is our product name; Google's Gemini runs privately on the server.
     const generatorName = 'Zap';
@@ -185,6 +200,7 @@ export default function App() {
         prompt: request,
         files: filesRef.current,
         signal: controller.signal,
+        accessCode: zapProtected ? zapAccessCode : '',
       })) {
         if (event.type === 'error') throw new Error(event.message);
         if (event.type === 'done') { finished = true; break; }
@@ -270,7 +286,7 @@ export default function App() {
           <button className="sidebar-button selected" onClick={() => { setPrompt(''); setScreen('home'); }}><Plus size={17}/> New project</button>
           <button className="sidebar-button" onClick={() => setScreen('workspace')}><Code2 size={17}/> Open workspace</button>
           <div className="sidebar-label examples-label">GET STARTED</div>
-          {suggested.map((item) => <button key={item.title} className="sidebar-button template-link" onClick={() => generate(item.prompt)} disabled={busy || !zapAvailable}><Sparkles size={15}/> {item.title}</button>)}
+          {suggested.map((item) => <button key={item.title} className="sidebar-button template-link" onClick={() => generate(item.prompt)} disabled={busy || !canUseZap}><Sparkles size={15}/> {item.title}</button>)}
           <div className="sidebar-tip"><ShieldCheck size={17}/><span>Projects are saved in this browser.</span></div>
         </aside>
         <section className="home-center">
@@ -279,13 +295,14 @@ export default function App() {
           <p className="home-description">Describe your idea. Buildora turns it into editable React code with a real browser preview.</p>
           <form className="home-prompt" onSubmit={(event) => { event.preventDefault(); generate(); }}>
             <textarea aria-label="Describe what you want to build" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask Buildora to build a portfolio, task manager, landing page..." rows={4} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); generate(); } }}/>
+            {zapAvailable && zapProtected && <ZapAccessField value={zapAccessCode} onChange={setZapAccessCode}/>}
             <div className="home-prompt-footer">
-              <div className="zap-connection"><Zap size={16}/><strong>Zap</strong><span className={zapAvailable ? 'zap-online' : 'zap-offline'}>{zapAvailable ? 'Ready' : 'Unavailable'}</span></div>
-              <button className="blue-button" type="submit" disabled={busy || !prompt.trim() || !zapAvailable}>Build now <ArrowRight size={16}/></button>
+              <div className="zap-connection"><Zap size={16}/><strong>Zap</strong><span className={canUseZap ? 'zap-online' : 'zap-offline'}>{zapStatus}</span></div>
+              <button className="blue-button" type="submit" disabled={busy || !prompt.trim() || !canUseZap}>Build now <ArrowRight size={16}/></button>
             </div>
             {!zapAvailable && <p className="zap-setup-note" role="status">{zapMessage}</p>}
           </form>
-          <div className="home-examples"><span>Try an example</span><div>{suggested.map((item) => <button key={item.title} onClick={() => generate(item.prompt)} disabled={busy || !zapAvailable}>{item.title} <ArrowUp size={13}/></button>)}</div></div>
+          <div className="home-examples"><span>Try an example</span><div>{suggested.map((item) => <button key={item.title} onClick={() => generate(item.prompt)} disabled={busy || !canUseZap}>{item.title} <ArrowUp size={13}/></button>)}</div></div>
           <div className="home-footnote"><Check size={16}/> Edit the code <span/> <Check size={16}/> Run a preview <span/> <Check size={16}/> Export your project</div>
         </section>
       </main>
@@ -306,11 +323,12 @@ export default function App() {
             <form onSubmit={(event) => { event.preventDefault(); generate(); }}>
               <textarea aria-label="Describe what to build or change" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Build a task manager with add, complete and delete features..." rows={3} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); generate(); } }}/>
               {!zapAvailable && <p className="zap-setup-note" role="status">{zapMessage}</p>}
+              {zapAvailable && zapProtected && <ZapAccessField value={zapAccessCode} onChange={setZapAccessCode}/>}
               <div className="prompt-actions">
-                <div className="zap-connection"><Zap size={16}/><strong>Zap</strong><span className={zapAvailable ? 'zap-online' : 'zap-offline'}>{zapAvailable ? 'Ready' : 'Unavailable'}</span></div>
+                <div className="zap-connection"><Zap size={16}/><strong>Zap</strong><span className={canUseZap ? 'zap-online' : 'zap-offline'}>{zapStatus}</span></div>
                 <div className="prompt-action-buttons">
-                  {suggested.slice(0, 2).map((item) => <button type="button" className="prompt-suggestion" key={item.title} onClick={() => generate(item.prompt)} disabled={busy || !zapAvailable}>+ {item.title}</button>)}
-                  <button type="submit" className="blue-button" disabled={!prompt.trim() || busy || !zapAvailable}>{busy ? <><LoaderCircle size={16} className="spinning"/> Generating</> : <><Sparkles size={16}/> Generate</>}</button>
+                  {suggested.slice(0, 2).map((item) => <button type="button" className="prompt-suggestion" key={item.title} onClick={() => generate(item.prompt)} disabled={busy || !canUseZap}>+ {item.title}</button>)}
+                  <button type="submit" className="blue-button" disabled={!prompt.trim() || busy || !canUseZap}>{busy ? <><LoaderCircle size={16} className="spinning"/> Generating</> : <><Sparkles size={16}/> Generate</>}</button>
                 </div>
               </div>
             </form>

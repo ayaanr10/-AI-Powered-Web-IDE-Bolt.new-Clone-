@@ -11,13 +11,24 @@ Buildora is a React frontend served by a Node/Express backend. The generated Rea
 
 **Service naming:** The existing Render Blueprint still uses the historical service name `buildora-ide-demo` to avoid accidentally creating a second service. That name is not a generation mode, and no demo generator exists in the application.
 
-## Public Zap requests are disabled by default
+## Enable Zap safely on your existing Render service
 
-The Render Blueprint sets `PUBLIC_ZAP_ENABLED=0`. In production, Zap is unavailable until private server credentials **and** an appropriate access-control and usage-limit implementation are in place. Merely copying your key into Render and turning on a flag would expose your API quota to anonymous visitors, so do not do that.
+The site stays publicly visible, but generation requires a private code. Open the service's **Environment** tab:
 
-For now, run and demonstrate **real Zap generation locally**, with `GEMINI_API_KEY` in a private `.env` file that never enters the GitHub repository. Use the public Render site for the editor and preview, not for unrestricted AI generation.
+| Name | Value |
+| --- | --- |
+| `GEMINI_API_KEY` | Your **private** Google AI Studio key |
+| `GEMINI_MODEL` | `gemini-3.8-flash` (or another model your key can access) |
+| `PUBLIC_ZAP_ENABLED` | `1` |
+| `ZAP_ACCESS_CODE` | A unique randomly generated code of at least 16 characters |
 
-Before enabling public Zap in a future version, implement authentication, per-user quotas, abuse controls, API cost caps, logging, and appropriate security review.
+Select **Save, rebuild, and deploy**. Never share these secrets in screenshots, GitHub, or chat.
+
+Once live, a **Private Zap access code** field appears on the Buildora home and workspace screens. Enter your code, then click Build now. The React app sends this code over HTTPS to the same-origin Express API; the server checks it before calling Gemini. Missing or incorrect codes return HTTP 401. The code is kept only in React memory and is cleared on refresh.
+
+The existing in-memory rate limiter adds basic protection but is not a substitute for strong authentication, durable per-user quotas or provider-side spending controls. This is a **private interview demo**, not an unrestricted public AI service. If the code is shared, disable Zap and change it.
+
+If the code is absent, shorter than 16 characters, or `PUBLIC_ZAP_ENABLED=0`, production Zap remains disabled.
 
 ## Production architecture
 

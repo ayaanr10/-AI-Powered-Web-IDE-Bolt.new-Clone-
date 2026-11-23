@@ -1,17 +1,22 @@
 import 'dotenv/config';
 import express from 'express';
+import { matchesAccessCode } from './zap-access.js';
 import { streamGeminiText } from './gemini.js';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Local use is allowed with an API key. Public use requires extra protection.
-const publicZapBlocked = process.env.NODE_ENV === 'production' && process.env.PUBLIC_ZAP_ENABLED !== '1';
+// Hosted generation requires an opt-in and a long private access code.
+const isProduction = process.env.NODE_ENV === 'production';
+const protectedZap = isProduction && process.env.PUBLIC_ZAP_ENABLED === '1'
+  && (process.env.ZAP_ACCESS_CODE?.length ?? 0) >= 16;
+const publicZapBlocked = isProduction && !protectedZap;
 const zapAvailable = () => !publicZapBlocked && Boolean(process.env.GEMINI_API_KEY);
 const zapMessage = () => publicZapBlocked
-  ? 'Zap is disabled on this public site until authentication and usage limits are configured.'
+  ? 'Zap is locked on this public site. The owner must configure private access first.'
   : !process.env.GEMINI_API_KEY
-    ? 'Add GEMINI_API_KEY to your local .env and restart npm run dev to enable Zap.'
-    : 'Zap is ready.';
+    ? 'Zap needs a private GEMINI_API_KEY on the server.'
+    : protectedZap ? 'Enter your private Zap access code to generate an app.' : 'Zap is ready.';
 const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
 import { validateFiles } from '../shared/filesystem.js';
 import { SYSTEM_PROMPT, makeUserPrompt } from './prompts.js';
@@ -40,7 +45,7 @@ function throttle(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, zapAvailable: zapAvailable(), zapMessage: zapMessage(), model: process.env.GEMINI_MODEL || 'gemini-3.8-flash' });
+  res.json({ ok: true, zapAvailable: zapAvailable(), zapProtected: protectedZap, zapMessage: zapMessage(), model: process.env.GEMINI_MODEL || 'gemini-3.8-flash' });
 });
 
 app.post('/api/generate', throttle, async (req, res) => {
@@ -59,6 +64,10 @@ app.post('/api/generate', throttle, async (req, res) => {
   }
   if (!process.env.GEMINI_API_KEY) {
     return res.status(503).json({ error: zapMessage() });
+  }
+  // Validate the owner code BEFORE contacting the Gemini API.
+  if (protectedZap && !matchesAccessCode(req.get('x-zap-access-code'), process.env.ZAP_ACCESS_CODE)) {
+    return res.status(401).json({ error: 'Incorrect or missing Zap access code.' });
   }
 
   res.writeHead(200, {
