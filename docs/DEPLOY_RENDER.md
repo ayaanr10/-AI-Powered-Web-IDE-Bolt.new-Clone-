@@ -1,53 +1,43 @@
-# Deploy Buildora to Render (public demo)
+# Buildora on Render — public preview
 
-Buildora has **one** Node/Express web service. In production, Express serves the built React interface and the `/api` endpoints from the same URL. The WebContainers preview still runs **inside each visitor's browser**.
+Buildora is a React frontend served by a Node/Express backend. The generated React preview runs with WebContainers in the browser. **Zap is the only generation option.** It uses the Gemini API on the server.
 
-## One-click setup
+## Deploy the site
 
-1. Open the [Deploy to Render shortcut](https://render.com/deploy?repo=https://github.com/ayaanr10/-AI-Powered-Web-IDE-Bolt.new-Clone-).
-2. Sign into Render and approve access to the repository if asked.
-3. Review the Blueprint configuration in `render.yaml`. It creates one **Free** Node web service named `buildora-ide-demo`.
-4. Choose **Deploy Blueprint** and open the service's actual `.onrender.com` address from Render after the deployment is Live.
-5. In desktop Chrome or Edge, choose **Demo**, click **Task manager**, and then click **Run app**.
+1. Use [Deploy to Render](https://render.com/deploy?repo=https://github.com/ayaanr10/-AI-Powered-Web-IDE-Bolt.new-Clone-), or open your existing Buildora Render service.
+2. Review the settings in `render.yaml`, which builds React with Vite and starts `node server/index.js`.
+3. Wait until Render shows **Live** and open its assigned URL.
+4. The home page, editable starter files, import/export, and browser preview work without an AI key.
 
-There is no automatic public URL until the Render service has actually been created in your account. Free services can take time to wake up after inactivity.
+**Service naming:** The existing Render Blueprint still uses the historical service name `buildora-ide-demo` to avoid accidentally creating a second service. That name is not a generation mode, and no demo generator exists in the application.
 
-## Why no Gemini key in the public demo?
+## Public Zap requests are disabled by default
 
-A publicly accessible web endpoint that spends your Gemini API quota could be abused. The Render Blueprint enables `PUBLIC_DEMO=1`, which **disables live Gemini mode even if the service accidentally receives a key**. This protects your quota for the first deployment.
+The Render Blueprint sets `PUBLIC_ZAP_ENABLED=0`. In production, Zap is unavailable until private server credentials **and** an appropriate access-control and usage-limit implementation are in place. Merely copying your key into Render and turning on a flag would expose your API quota to anonymous visitors, so do not do that.
 
-For your interview, demonstrate:
-- Demo generation and editable React files on the deployed site.
-- Real Gemini generation locally, with your API key in a private `.env`, never committed to GitHub.
+For now, run and demonstrate **real Zap generation locally**, with `GEMINI_API_KEY` in a private `.env` file that never enters the GitHub repository. Use the public Render site for the editor and preview, not for unrestricted AI generation.
 
-For a future public Gemini version, add authentication, user-level rate limits, spending controls, and abuse prevention *before* enabling live generation. Do not remove the demo restriction until those safeguards are in place.
+Before enabling public Zap in a future version, implement authentication, per-user quotas, abuse controls, API cost caps, logging, and appropriate security review.
 
-## How the deployment works (interview explanation)
+## Production architecture
 
 ```
-GitHub push
-   ↓
-Render builds the Vite React application into dist/
-   ↓
-Render starts server/index.js
-   ↓
-Express serves both the React files and /api/generate
-   ↓
-The visitor enters a prompt and sees the workspace
-   ↓
-WebContainers runs the generated Vite project in that visitor's browser
+GitHub -> Render builds frontend dist/ -> Express starts
+Express serves React files + /api/health + /api/generate
+React -> Zap prompt -> Express -> Gemini (private server key)
+                 response -> artifact parser -> editable files
+                 WebContainers -> npm + Vite -> preview iframe
 ```
 
-`server/index.js` sets the two cross-origin isolation headers needed by WebContainers:
+The service binds to Render's `PORT` on `0.0.0.0`, while the local API uses `127.0.0.1:3001`. Cross-origin isolation headers for WebContainers are set by Express:
+
 - `Cross-Origin-Opener-Policy: same-origin`
 - `Cross-Origin-Embedder-Policy: credentialless`
 
-The Express server listens on `0.0.0.0` and Render's assigned `PORT` in production. Local development still uses Vite at `http://localhost:5173` and the API on `127.0.0.1:3001`.
-
 ## Troubleshooting
 
-- **Home page loads but Run app fails:** Try desktop Chrome/Edge, and inspect browser devtools or the UI's Show logs panel for WebContainer errors. Browser settings/extensions may interfere.
-- **Render returns a port error:** Confirm that it deployed the commit containing the new production host logic and used `node server/index.js`.
-- **Gemini AI option unavailable:** That's expected on the public demo. Run locally with your own private key instead.
-- **Waiting on first visit:** The Render Free service may have spun down.
-- **Want your changes live?** Commit them to the connected GitHub branch and verify the latest successful Render deploy in the dashboard.
+- **Zap shows Unavailable on Render:** Expected for the publicly accessible service.
+- **Zap shows Unavailable locally:** Check `.env`, restart `npm run dev`, and inspect `http://localhost:5173/api/health`.
+- **Gemini responds with HTTP 503:** The model is temporarily overloaded; the adapter retries twice with backoff and shows the error if it still fails.
+- **Preview won't run:** Check desktop Chrome/Edge compatibility, WebContainer logs and COOP/COEP settings.
+- **Render serves old code:** Check the deployed Git SHA or use **Manual Deploy -> Deploy latest commit** from the existing service.
