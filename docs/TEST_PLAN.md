@@ -1,44 +1,38 @@
-# Test plan and validation status
+# Buildora — Zap-only test plan
 
-## Unit tests (available without installing packages)
+## Automated tests
 
-Run: `node --test tests/*.test.js`
+Run `npm run check`. This runs Node's built-in tests and the Vite production build.
 
 Tests cover:
+- Incremental artifact parsing across arbitrary network chunk boundaries
+- File and directory safety, including path traversal rejection
+- File size and count limits, and WebContainer mount trees
+- Gemini SSE parsing, 503 retry/backoff and non-retryable errors
+- Express `/api/health`, prompt validation, and rejection of obsolete demo requests
 
-- Recursive XML tree and source-code raw text preservation
-- 1-, 2-, 7-, 26-, 99-character streaming boundaries
-- Multiple action tags and self-closing delete
-- Invalid path traversal and `.env` rejection
-- Truncated/malformed responses
-- Immutable file application and nested WebContainer mount tree
-- File count/size limits
-- Fully parseable task-manager and landing-page demo artifacts
+No tests send a real Gemini request or require a real API key.
 
-## Manual browser integration test (run after `npm install`)
+## Manual local checklist
 
-- [ ] `npm run dev` launches Vite on 5173 and API on 3001.
-- [ ] `GET http://localhost:3001/api/health` returns `ok: true`.
-- [ ] In demo mode, click **Task manager**; file tree and editor show new JSX/CSS.
-- [ ] Click **Run project**; inspect terminal install/start logs.
-- [ ] WebContainer emits server-ready, and preview displays interactive app.
-- [ ] Add/check/delete a task in iframe; see UI update.
-- [ ] Edit text in `src/App.jsx`, check HMR reflects edit.
-- [ ] Export ZIP, unzip locally, inspect `src/App.jsx`.
-- [ ] Refresh browser and check current file contents persisted.
-- [ ] Import previously exported ZIP, then Restart runtime.
-- [ ] In Live mode with key, ask for a minor change and inspect streamed edits.
-- [ ] Check the API key is absent from browser DevTools source/network payloads.
+- [ ] `npm run dev` starts backend on 3001 and Vite on 5173.
+- [ ] `/api/health` returns `zapAvailable:true` when the private key is configured.
+- [ ] Buildora shows **Zap · Ready** and no Demo/Gemini selector.
+- [ ] Enter a restaurant prompt. Generate calls Zap and updates the React source on success.
+- [ ] If Gemini returns 503, error is visible and previous files remain unchanged.
+- [ ] After a successful generation, click **Run app** and check WebContainer preview.
+- [ ] Edit CSS and confirm Vite HMR refreshes the preview.
+- [ ] Export code as ZIP and inspect the files.
+- [ ] Refresh and confirm workspace localStorage persistence.
+- [ ] Test ZIP import, then Restart app.
+- [ ] Confirm the API key never appears in the browser's requests or bundled source.
 
-## Validation of this delivered package
+## Negative paths
 
-Unit tests now include the Gemini SSE adapter and parser, with synthetic SSE fixtures (no real API key or network required). The package registry could not be reached (`npm` reported DNS `EAI_AGAIN`), so dependency installation, `npm run build`, and browser/WebContainer end-to-end testing **were not completed in this environment**. These checks must be run on your computer before claiming the full app is tested.
+- [ ] No configured API key: Zap shows **Unavailable**, clearly explains setup, and Generate is disabled.
+- [ ] Public Render deployment with `PUBLIC_ZAP_ENABLED=0`: Zap unavailable; starter editor and preview remain accessible.
+- [ ] Malformed prompt or invalid file path: server rejects request.
+- [ ] Obsolete request containing `mode:'demo'`: server rejects it, with no template generation.
+- [ ] Broken generated import: Vite errors appear in logs without falsely reporting successful preview.
 
-## Negative-path manual tests
-
-- Enter a blank prompt; Generate remains disabled.
-- Select Live without an API key; see helpful backend error.
-- Try to add a file named `../private`; editor rejects it.
-- Give a malformed ZIP; import shows a descriptive error.
-- Deliberately break `src/App.jsx`; preview should show Vite diagnostic output.
-- Click Restart after changing `package.json` to ensure npm reinstallation.
+**Scope:** An automated test/build pass does not prove that a live Gemini request succeeded. Perform the browser checks with your own private key before presenting full AI generation as verified.
