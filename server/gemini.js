@@ -6,6 +6,8 @@
  * half an event or several events, so we buffer and split on blank lines.
  * Our Express API converts extracted text into provider-neutral NDJSON.
  */
+import { setTimeout as pause } from 'node:timers/promises';
+
 const API_ORIGIN = 'https://generativelanguage.googleapis.com/v1beta/models';
 const MAX_SSE_EVENT_CHARS = 1_000_000;
 
@@ -51,11 +53,11 @@ function eventText(data) {
 
 export async function* streamGeminiText({
   apiKey, model = 'gemini-3.8-flash', systemPrompt, userPrompt,
-  signal, fetchImpl = fetch,
+  signal, fetchImpl = fetch, retryDelayMs = 1000,
 }) {
   if (!apiKey) throw new Error('Missing GEMINI_API_KEY.');
   const url = `${API_ORIGIN}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
-  const response = await fetchImpl(url, {
+  const request = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
@@ -64,12 +66,26 @@ export async function* streamGeminiText({
       generationConfig: { temperature: 0.3, maxOutputTokens: 16000 },
     }),
     signal,
-  });
+  };
+
+  // Google's 503 means temporary overload. Retry only before any stream begins.
+  // Two short retries prevent an outage from triggering unlimited API calls.
+  let response;
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    response = await fetchImpl(url, request);
+    if (response.status !== 503 || attempt === 2) break;
+    await response.body?.cancel?.();
+    await pause(retryDelayMs * (2 ** attempt), undefined, { signal });
+  }
 
   if (!response.ok) {
     const failure = await response.json().catch(() => ({}));
     const detail = failure.error?.message || response.statusText || 'Unknown API error';
-    const extra = response.status === 429 ? ' Check free-tier quota in Google AI Studio.' : '';
+    const extra = response.status === 429
+      ? ' Check your quota in Google AI Studio.'
+      : response.status === 503
+        ? ' Gemini is overloaded. Buildora retried twice; try later or switch to another model available in AI Studio.'
+        : '';
     throw new Error(`Gemini API ${response.status}: ${detail}${extra}`);
   }
   if (!response.body) throw new Error('Gemini returned no streaming body.');
