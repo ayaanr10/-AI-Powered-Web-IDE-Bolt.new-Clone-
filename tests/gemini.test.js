@@ -60,3 +60,41 @@ test('Empty or truncated Gemini outputs do not appear successful', async () => {
   await assert.rejects(gather({ apiKey: 'test-key', systemPrompt: 'x', userPrompt: 'y', fetchImpl: async () => new Response(mockStream(['data: {"candidates":[]}\n\n'])) }), /no text/);
   await assert.rejects(gather({ apiKey: 'test-key', systemPrompt: 'x', userPrompt: 'y', fetchImpl: async () => new Response(mockStream([fixture('partial', 'MAX_TOKENS')])) }), /output limit/);
 });
+
+test('temporary Gemini 503 retries once and then streams a successful result', async () => {
+  let calls = 0;
+  const output = await gather({
+    apiKey: 'test-key', systemPrompt: 'x', userPrompt: 'y', retryDelayMs: 1,
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) return new Response(JSON.stringify({ error: { message: 'High demand' } }), { status: 503 });
+      return new Response(mockStream([fixture('Restaurant generated', 'STOP')]), { status: 200 });
+    },
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(output, ['Restaurant generated']);
+});
+
+test('Gemini overload stops after two retries and displays an actionable error', async () => {
+  let calls = 0;
+  await assert.rejects(gather({
+    apiKey: 'test-key', systemPrompt: 'x', userPrompt: 'y', retryDelayMs: 1,
+    fetchImpl: async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ error: { message: 'High demand' } }), { status: 503 });
+    },
+  }), /Gemini is overloaded.*retried twice/);
+  assert.equal(calls, 3);
+});
+
+test('Gemini does not retry quota errors', async () => {
+  let calls = 0;
+  await assert.rejects(gather({
+    apiKey: 'test-key', systemPrompt: 'x', userPrompt: 'y', retryDelayMs: 1,
+    fetchImpl: async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ error: { message: 'Quota reached' } }), { status: 429 });
+    },
+  }), /429/);
+  assert.equal(calls, 1);
+});
