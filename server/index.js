@@ -4,11 +4,17 @@ import { streamGeminiText } from './gemini.js';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const publicDemo = process.env.PUBLIC_DEMO === '1';
+// Local use is allowed with an API key. Public use requires extra protection.
+const publicZapBlocked = process.env.NODE_ENV === 'production' && process.env.PUBLIC_ZAP_ENABLED !== '1';
+const zapAvailable = () => !publicZapBlocked && Boolean(process.env.GEMINI_API_KEY);
+const zapMessage = () => publicZapBlocked
+  ? 'Zap is disabled on this public site until authentication and usage limits are configured.'
+  : !process.env.GEMINI_API_KEY
+    ? 'Add GEMINI_API_KEY to your local .env and restart npm run dev to enable Zap.'
+    : 'Zap is ready.';
 const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
 import { validateFiles } from '../shared/filesystem.js';
 import { SYSTEM_PROMPT, makeUserPrompt } from './prompts.js';
-import { getDemoArtifact } from './demo.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -34,22 +40,25 @@ function throttle(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, liveAvailable: !publicDemo && Boolean(process.env.GEMINI_API_KEY), model: process.env.GEMINI_MODEL || 'gemini-3.8-flash' });
+  res.json({ ok: true, zapAvailable: zapAvailable(), zapMessage: zapMessage(), model: process.env.GEMINI_MODEL || 'gemini-3.8-flash' });
 });
 
 app.post('/api/generate', throttle, async (req, res) => {
-  const { prompt, files, mode = 'demo' } = req.body ?? {};
+  const { prompt, files } = req.body ?? {};
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 2000) {
     return res.status(400).json({ error: 'Prompt must have 1–2000 characters.' });
   }
   try { validateFiles(files); }
   catch (err) { return res.status(400).json({ error: err.message }); }
-  if (!['demo', 'live'].includes(mode)) return res.status(400).json({ error: 'Invalid generation mode.' });
-  if (mode === 'live' && publicDemo) {
-    return res.status(403).json({ error: 'Public preview uses Demo mode to protect API usage. Run the app locally for Gemini AI.' });
+  // Reject outdated clients that try to use the removed demo path.
+  if (req.body?.mode && req.body.mode !== 'zap') {
+    return res.status(400).json({ error: 'Demo mode has been removed. Refresh Buildora to use Zap.' });
   }
-  if (mode === 'live' && !process.env.GEMINI_API_KEY) {
-    return res.status(400).json({ error: 'Live AI needs GEMINI_API_KEY in your server .env. Demo mode works without it.' });
+  if (publicZapBlocked) {
+    return res.status(403).json({ error: zapMessage() });
+  }
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(503).json({ error: zapMessage() });
   }
 
   res.writeHead(200, {
@@ -61,32 +70,20 @@ app.post('/api/generate', throttle, async (req, res) => {
   const send = (event) => { if (!res.writableEnded && !res.destroyed) res.write(JSON.stringify(event) + '\n'); };
   let cancelled = false;
   res.on('close', () => { cancelled = true; });
-  send({ type: 'start', mode });
+  send({ type: 'start', mode: 'zap' });
   try {
-    if (mode === 'demo') {
-      const xml = getDemoArtifact(prompt);
-      const sizes = [31, 9, 67, 18, 121, 44, 181, 53];
-      for (let i = 0, k = 0; i < xml.length && !cancelled; k++) {
-        const n = sizes[k % sizes.length];
-        send({ type: 'chunk', text: xml.slice(i, i + n) });
-        i += n;
-        if (k % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 5));
-      }
-    } else {
-      // API credentials stay on this Node server, never in the browser.
-      // Gemini emits SSE; the adapter yields text chunks and Express emits NDJSON.
-      const controller = new AbortController();
-      res.on('close', () => controller.abort());
-      for await (const text of streamGeminiText({
-        apiKey: process.env.GEMINI_API_KEY,
-        model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
-        systemPrompt: SYSTEM_PROMPT,
-        userPrompt: makeUserPrompt(prompt, files),
-        signal: controller.signal,
-      })) {
-        if (cancelled) break;
-        send({ type: 'chunk', text });
-      }
+    // Zap is the only generation workflow. The key never reaches React.
+    const controller = new AbortController();
+    res.on('close', () => controller.abort());
+    for await (const text of streamGeminiText({
+      apiKey: process.env.GEMINI_API_KEY,
+      model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+      systemPrompt: SYSTEM_PROMPT,
+      userPrompt: makeUserPrompt(prompt, files),
+      signal: controller.signal,
+    })) {
+      if (cancelled) break;
+      send({ type: 'chunk', text });
     }
     if (!cancelled) send({ type: 'done' });
   } catch (err) {
