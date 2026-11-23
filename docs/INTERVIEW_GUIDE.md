@@ -2,7 +2,7 @@
 
 ## 45-second project summary
 
-> I built PromptForge, a React and Node.js browser IDE that converts natural-language instructions into editable React apps. The Express backend streams output from Gemini through a REST SSE adapter without exposing the API key. I wrote a recursive XML-like parser with streaming support to turn its responses into file operations, which update a virtual filesystem. Then WebContainers installs dependencies, runs Vite directly in the browser, and sends the live preview back to the UI. I also added CodeMirror editing, local persistence, ZIP export, a demo mode and unit tests.
+> I worked on Buildora, a React and Node.js browser IDE that converts natural-language instructions into editable React apps. The Express backend streams output from Gemini through a REST SSE adapter without exposing the API key. I wrote a recursive XML-like parser with streaming support to turn its responses into file operations, which update a virtual filesystem. Then WebContainers installs dependencies, runs Vite directly in the browser, and sends the live preview back to the UI. I also worked on CodeMirror editing, local persistence, ZIP export, a Zap-only interface, and unit tests.
 
 **Use your own words after you have run and understood it.** You should be able to point to the actual file in the repo for every item you mention.
 
@@ -10,7 +10,7 @@
 
 1. **Problem** — Starting a new React project requires scaffolding, package installs, file creation and switching between an editor and terminal. The idea was to shorten the *idea-to-working-prototype* loop.
 2. **Architecture** — React browser interface + Express API backend + Gemini REST adapter + custom parser + VFS + WebContainers. Draw the flow from the README diagram.
-3. **Demo** — Ask for a task manager in Demo mode. Show two new source files; edit a CSS rule in CodeMirror; Run, click a task in the preview, and watch changes hot-reload. If you have a personal API key, repeat with Live AI.
+3. **Live Zap test** — Run locally with a private Gemini key. Ask Zap for a small restaurant site, show the generated files and preview, then edit a CSS rule and verify live updates. If Google is overloaded, explain the 503 retry behavior without claiming success.
 4. **Hardest piece** — Parsing incremental LLM output. Demonstrate why a closing `</file>` marker might arrive split across 3 network chunks, and how the parser waits before applying the action. Show `tests/parser.test.js` testing chunk size 1.
 5. **Engineering decisions** — API key only on server, controlled prompt size, path traversal checks, WebContainers cross-origin isolation, local persistence.
 6. **Limitations** — Explain that raw `</file>` inside generated source is a protocol edge case, and that this MVP doesn't include cloud workspaces or deployment.
@@ -41,9 +41,9 @@ A: WebContainer boots a Node-compatible process in a supported browser, mounts t
 
 A: WebContainers needs SharedArrayBuffer/cross-origin isolation. The development server includes COOP/COEP headers; opening a file directly does not serve those headers.
 
-**Q: What does demo mode prove?**
+**Q: What is Zap?**
 
-A: It tests the same chunked transport → parser → VFS → editable code path without paying for LLM requests. It is deterministic, not a pretend AI response disguised as Gemini.
+A: Zap is the name of the generation experience inside Buildora. It calls Google's Gemini API through a private Express backend. The backend validates the request, streams the response, and the frontend parses and applies completed file changes. There is no demo-template fallback.
 
 **Q: What security checks are included?**
 
@@ -51,7 +51,7 @@ A: Server-side input caps, a request limiter, private backend API key, generated
 
 **Q: What breaks if Gemini's answer is incomplete?**
 
-A: `finish()` throws on a truncated artifact. Completed file actions may already have applied; a transactional commit mechanism would be a future improvement.
+A: `finish()` throws on a truncated artifact. Buildora collects the proposed changes and commits them only after the stream finishes and the files validate, so the previous app is preserved if generation fails.
 
 **Q: Why React state rather than a database?**
 
@@ -75,6 +75,6 @@ A: Use schema-validated tool outputs instead of raw XML delimiters, add a versio
 
 - Developed a prompt-to-React IDE that streams LLM-generated file operations into an editable virtual filesystem and in-browser live preview.
 - Implemented an incremental XML-style parser, guarded file operations, CodeMirror editing, and WebContainer-based Vite execution.
-- Added deterministic demo generation, local project persistence, ZIP export and unit tests.
+- Added Zap-only generation, local project persistence, ZIP export and unit tests.
 
 If you haven't tested the Gemini API with your own key, say **"Integrated the Gemini streaming REST adapter; live generation requires a configured API key"** rather than claiming you've observed successful live responses. Do not claim you wrote code yourself that you cannot explain.
