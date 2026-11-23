@@ -1,7 +1,7 @@
-export async function* generateStream({ prompt, files, mode, signal }) {
+export async function* generateStream({ prompt, files, signal }) {
   const response = await fetch('/api/generate', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, files, mode }), signal,
+    body: JSON.stringify({ prompt, files }), signal,
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
