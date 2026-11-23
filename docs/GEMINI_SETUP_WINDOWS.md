@@ -1,36 +1,21 @@
-# Gemini edition — Windows setup (5 steps)
+# Zap — Windows setup (Buildora's Gemini-powered generator)
 
-This ZIP is a new version of PromptForge. The previous version calls Claude. **Use this folder**, not the old one.
+Zap is the **only** Buildora generation option. It calls Gemini on a local Node backend so your API key never appears in browser source.
 
-1. Extract `PromptForge_Gemini_Edition.zip` to a **new location**, for example `Documents\PromptForge-Gemini`.
-2. Open the extracted `forge-ide` folder in VS Code. Open **Terminal > New Terminal**.
-3. Run `npm install`, then `Copy-Item .env.example .env` (or make `.env` manually if it already exists).
-4. Open `.env`, set `GEMINI_API_KEY=YOUR_OWN_KEY` on one line. Leave `GEMINI_MODEL=gemini-2.5-flash`. **Never share this key or commit `.env`.**
-5. Run `npm run dev`, open `http://localhost:5173`, then select **Gemini · Live AI** under MODEL.
-
-Example request: `Create a student attendance dashboard with 3 subject cards, a progress bar and a purple theme. Keep it simple and responsive.`
-
-Once files appear, click **Run project** if the preview isn't started. If it is running, code changes should sync automatically.
-
-## Quick checks
-
-- `npm run test` should run 16 tests, including 5 fake (key-free) Gemini adapter tests.
-- `http://localhost:3001/api/health` should return JSON including `"liveAvailable":true` if the backend loaded your key. The JSON never contains your key.
-- `npm run check` runs the tests plus production Vite build.
-- If you see the old Claude dropdown, you started the wrong extracted folder. Stop the old process with `Ctrl + C` and run this version.
+1. Open the latest Buildora source folder in VS Code. It must contain `package.json`.
+2. In PowerShell run `npm install` and `Copy-Item .env.example .env`. If `.env` already exists, **don't overwrite it**.
+3. Open the private `.env` file. Set `GEMINI_API_KEY` to a new, unshared key from your own Google AI Studio account. Set `GEMINI_MODEL` to a supported model your API key can access, such as the value in `.env.example`. Never put your key in screenshots, chat, or GitHub.
+4. Run `npm run dev` and confirm the API (port 3001) and Vite (port 5173) start.
+5. Open `http://localhost:5173/api/health` and check `"zapAvailable":true`. Open `http://localhost:5173`: the homepage will show **Zap · Ready**, not a mode dropdown.
+6. Ask Zap to build a small restaurant homepage. Then use **Run app** to launch the generated React app in the WebContainer preview.
 
 ## Troubleshooting
 
-| Problem | Explanation / action |
-|---|---|
-| `liveAvailable:false` | `.env` is missing, the key value is blank, or the Node backend wasn't restarted. |
-| `Gemini API 400` | Check model name and Gemini API key project access. |
-| `Gemini API 403` | Check Google AI Studio permissions and whether this key can access the Gemini Developer API. |
-| `Gemini API 429` | Rate or quota limit reached. Check your current free-tier limits in Google AI Studio. |
-| AI artifact incomplete | Model may have hit token limit; request a smaller project/change. |
-| Preview blank or broken | Check the built-in terminal for missing import/dependency errors; try restarting the WebContainer. |
-| `npm install` fails | Check Node 20.19+, internet, npm registry accessibility and local firewall/proxy. |
+- **Zap Unavailable:** The key is blank/missing, the backend is not running, or the app is on the protected public Render deployment. Check `/api/health`.
+- **Port 5173 already in use:** Stop the other Vite server before starting the new one; don't stop unrelated Node processes.
+- **Gemini 404:** Your chosen model isn't available to the API key. Use a supported model ID shown in your Google AI Studio project.
+- **Gemini 503:** The model is temporarily overloaded. Zap retries twice with short backoff; try another available model or test later if overload persists.
+- **Gemini 429:** You may have exhausted a rate or quota limit. Inspect your current quota and billing in Google AI Studio.
+- **Generated app breaks:** Check Show logs, fix any imports, and restart the WebContainer if package.json changed.
 
-Google's free-tier eligibility and rate limits can change; check the [official pricing](https://ai.google.dev/gemini-api/docs/pricing) and [quotas](https://ai.google.dev/gemini-api/docs/rate-limits) for your own project. Do not assume a request is free if billing is active.
-
-**Interview explanation:** Google streams Server-Sent Events (SSE), the Node backend extracts Gemini's text and forwards provider-neutral NDJSON, and the browser's custom parser applies `<file>` operations to a virtual filesystem. CodeMirror edits the files and WebContainers runs React/Vite.
+The API key is never sent to React. The server streams Gemini's SSE text as NDJSON; a parser turns the structured response into source-file changes. WebContainers then runs the generated Vite app in the browser.
