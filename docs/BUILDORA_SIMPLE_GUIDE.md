@@ -6,7 +6,7 @@ Buildora is an educational AI-powered web IDE. A user describes an app in Englis
 
 ## The two screens
 
-1. **Home:** one prompt box, three example ideas, and a Demo/Gemini mode switch.
+1. **Home:** one prompt box, three example ideas, and a Zap availability badge. There is no mode selector.
 2. **Workspace:** a file sidebar on the left, a prompt box at the top, and two white panels for editable code and live preview. The Activity dropdown reveals AI responses. Import, export, logs, and reset stay secondary controls.
 
 The home/workspace switch is one ordinary React state variable in `src/App.jsx`:
@@ -21,14 +21,14 @@ When a user generates an app, `generate()` changes that state to `workspace`. Th
 
 1. **Input:** User types an idea into the React UI in `src/App.jsx`.
 2. **API request:** `generateStream()` in `src/lib/api.js` POSTs the prompt to the Express server.
-3. **Generation:** The server either returns predictable demo files or asks Gemini to generate file changes. The Gemini API key stays on the server, not in React.
+3. **Generation:** Zap asks Gemini to generate source-file changes through the Express server. The Gemini API key stays on the server, not in React.
 4. **Parsing:** `StreamingArtifactParser` converts streamed text into file actions (for example, create or update `src/App.jsx`).
 5. **Files:** React state holds the editable files, and browser localStorage saves the workspace on the same browser.
 6. **Preview:** `useWebContainer()` starts a browser-based Node.js runtime, installs dependencies, launches Vite, and shows the app in an iframe.
 
 ## A short interview answer
 
-"Buildora is a React and Node.js project that converts natural-language instructions into editable web apps. The frontend sends a prompt to an Express endpoint. The backend streams a response from Gemini or a demo generator. A parser converts the response into file changes. React stores these files, CodeMirror lets users edit them, and WebContainers run the generated Vite application inside the browser. I kept the UI simple with two React states: a home page and a workspace."
+"Buildora is a React and Node.js project that converts natural-language instructions into editable web apps. The frontend sends a prompt to an Express endpoint. The backend streams a response from Gemini through the Zap generator. A parser converts the response into file changes. React stores these files, CodeMirror lets users edit them, and WebContainers run the generated Vite application inside the browser. I kept the UI simple with two React states: a home page and a workspace."
 
 ## What is intentionally simple?
 
@@ -40,8 +40,8 @@ When a user generates an app, `generate()` changes that state to `workspace`. Th
 
 ## Important honesty points
 
-- **Demo mode** creates example projects without calling an LLM.
-- **Gemini mode** needs a working server and your own API key.
+- **Zap** is Buildora's only AI-generation option. It uses the private server-side Gemini integration.
+- Zap requires a supported model and a working API key; if the server is unavailable, the UI explains why generation is disabled.
 - **WebContainers** run in compatible browsers with cross-origin isolation; not every browser supports them.
 - The project stores files in browser localStorage, not a cloud database.
 - It is designed for learning and local use; production hosting would require stronger authentication, security, storage, and billing controls.
@@ -55,12 +55,12 @@ npm run dev
 
 Visit `http://localhost:5173` using Chrome or Edge.
 
-1. On the home page, select **Demo** and click **Task manager**.
-2. Confirm the workspace appears and files are added.
+1. Add a private Gemini API key to the local `.env`, restart the server, and confirm Zap shows **Ready**.
+2. Click **Restaurant website**, or describe a custom app, to ask Zap to generate the code.
 3. Click **Run app** and check the preview.
 4. Edit a file in CodeMirror; see whether the preview updates.
 5. Export the project.
-6. Optionally configure Gemini using the existing setup guide and test live generation.
+6. Try an AI follow-up such as changing the theme, and check the files update.
 
 For code-only checks:
 
