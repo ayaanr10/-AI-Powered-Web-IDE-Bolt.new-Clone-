@@ -15,7 +15,8 @@ button:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-v
   border-bottom:1px solid #e5eaf2;display:flex;align-items:center;gap:21px }
 .site-brand { display:inline-flex;align-items:center;gap:11px;border:0;background:none;color:#0f172a;
   font:800 23px 'Manrope',sans-serif;letter-spacing:-1.25px;padding:0 }
-.brand-symbol { display:inline-grid;place-items:center;color:#2563eb;width:35px;height:35px }
+.brand-symbol { display:inline-grid;place-items:center;width:35px;height:35px;flex-shrink:0 }
+.brand-symbol img { display:block;width:100%;height:100% }
 .brand-dot { color:#2563eb }
 .header-subtitle { color:#8190a7;font-size:12px;padding-left:19px;border-left:1px solid #e4e9f2 }
 .header-right { margin-left:auto;display:flex;align-items:center;gap:9px }
@@ -225,7 +226,8 @@ button:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-v
   display:grid;place-items:center;padding:20px }
 .about-modal { width:min(460px,100%);position:relative;background:#fff;border-radius:18px;
   padding:31px;box-shadow:0 22px 80px #1e33523b }
-.about-mark { color:#2563eb }
+.about-mark { width:44px;height:44px }
+.about-mark img { display:block;width:100%;height:100% }
 .about-modal h2 { color:#17243b;font:800 23px 'Manrope',sans-serif }
 .about-modal p { font-size:13px;color:#61728c;line-height:1.7 }
 .close-modal { position:absolute;right:17px;top:17px;color:#8292a8;background:none;border:0 }

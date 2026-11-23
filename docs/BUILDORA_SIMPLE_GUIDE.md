@@ -17,6 +17,16 @@ const [screen, setScreen] = useState('home');
 
 When a user generates an app, `generate()` changes that state to `workspace`. The backend and preview features are reused, not duplicated.
 
+## Branding: why the logo is three blocks
+
+The single file `public/buildora-mark.svg` contains three rounded blocks forming a small structure. It is reused in the header, About dialog, and browser favicon, so there is **one logo to maintain**.
+
+- `<img src="/buildora-mark.svg" alt="" />` displays the logo. Its empty alt text is intentional because the Buildora name appears next to it.
+- The browser favicon uses the same asset through `index.html`.
+- **Interview explanation:** "I chose three assembling blocks to represent combining reusable components into a complete app. I reused one SVG asset so all brand placements stay consistent."
+
+The AI name **Zap** is simply a product label, not a separate AI model. The backend still calls Gemini, and the API key stays server-side.
+
 ## Explain the request flow in six steps
 
 1. **Input:** User types an idea into the React UI in `src/App.jsx`.

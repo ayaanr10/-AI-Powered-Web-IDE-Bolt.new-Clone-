@@ -5,7 +5,7 @@ import { css } from '@codemirror/lang-css';
 import { html } from '@codemirror/lang-html';
 import { json } from '@codemirror/lang-json';
 import {
-  Activity, ArrowRight, ArrowUp, Bot, Braces, Check, ChevronDown, ChevronRight, CircleHelp,
+  Activity, ArrowRight, ArrowUp, Bot, Check, ChevronDown, ChevronRight, CircleHelp,
   Code2, Copy, Download, ExternalLink, File, FileCode2, FileJson2, FilePlus2,
   Folder, FolderOpen, GitBranch, Globe, HardDrive, Layers3, LayoutPanelLeft,
   LoaderCircle, Maximize2, MessageSquare, Monitor, MoreHorizontal, PanelBottom,
@@ -161,7 +161,8 @@ export default function App() {
   const generate = async (text = prompt) => {
     if (!text.trim() || busy || !zapAvailable) return;
     const request = text.trim();
-    const modeName = 'Zap';
+    // Zap is our product name; Google's Gemini runs privately on the server.
+    const generatorName = 'Zap';
     setScreen('workspace');
     setPrompt('');
     setBusy(true);
@@ -169,7 +170,7 @@ export default function App() {
     setMessages((old) => [
       ...old,
       { role: 'user', text: request },
-      { role: 'assistant', text: `Generating with ${modeName}…`, files: [] },
+      { role: 'assistant', text: `Generating with ${generatorName}…`, files: [] },
     ]);
 
     const controller = new AbortController();
@@ -199,7 +200,7 @@ export default function App() {
         }
         setMessages((old) => [
           ...old.slice(0, -1),
-          { role: 'assistant', text: responseMessage || `${modeName} is writing files…` },
+          { role: 'assistant', text: responseMessage || `${generatorName} is writing files…` },
         ]);
       }
 
@@ -221,18 +222,18 @@ export default function App() {
         ...old.slice(0, -1),
         {
           role: 'assistant',
-          text: `${modeName}: ${responseMessage || `Updated ${changed.length} file(s).`}`,
+          text: `${generatorName}: ${responseMessage || `Updated ${changed.length} file(s).`}`,
           files: changed,
         },
       ]);
-      setNotification(`${modeName} generated ${changed.length} file(s). ${wc.status === 'ready' ? 'Preview will update.' : 'Click Run app to preview.'}`);
+      setNotification(`${generatorName} generated ${changed.length} file(s). ${wc.status === 'ready' ? 'Preview will update.' : 'Click Run app to preview.'}`);
     } catch (err) {
       const cancelled = err.name === 'AbortError';
       const detail = cancelled ? 'Generation stopped.' : (err.message || 'Unknown generation error.');
       setGenerationError(detail);
       setMessages((old) => [
         ...old.slice(0, -1),
-        { role: 'assistant', text: `${modeName} failed: ${detail} Previous app was kept unchanged.`, files: [] },
+        { role: 'assistant', text: `${generatorName} failed: ${detail} Previous app was kept unchanged.`, files: [] },
       ]);
       setNotification('Generation did not finish. The previous app was kept; see the error above.');
     } finally {
@@ -247,7 +248,7 @@ export default function App() {
   return <div className="buildora">
     <header className="site-header">
       <button className="site-brand" onClick={() => setScreen('home')} aria-label="Buildora home">
-        <span className="brand-symbol"><Braces size={22} strokeWidth={2.7}/></span>
+        <span className="brand-symbol"><img src="/buildora-mark.svg" alt="" /></span>
         <span>Buildora<span className="brand-dot">.</span></span>
       </button>
       <span className="header-subtitle">AI-powered web IDE</span>
@@ -351,6 +352,6 @@ export default function App() {
     </div>}
     <input ref={importRef} type="file" accept=".zip,application/zip" hidden onChange={importProject}/>
     {notification && <div className="app-toast" role="status"><Sparkles size={16}/><span>{notification}</span><button onClick={() => setNotification('')} aria-label="Dismiss notification"><X size={16}/></button></div>}
-    {showInfo && <div className="modal-backdrop" onClick={() => setShowInfo(false)}><div className="about-modal" role="dialog" aria-modal="true" aria-label="About Buildora" onClick={(event) => event.stopPropagation()}><button className="close-modal" onClick={() => setShowInfo(false)} title="Close dialog" aria-label="Close"><X size={20}/></button><div className="about-mark"><Braces size={24}/></div><h2>Buildora</h2><p>Describe an app, then explore its editable React files and live preview. The frontend sends requests to an Express API. Zap uses a private server-side Gemini connection to stream source code into our file parser.</p><p>Files are saved locally in this browser. Zap requires a private API key on the server. Public generation is disabled until secure access controls are added.</p><button className="blue-button" onClick={() => setShowInfo(false)}>Got it <Check size={16}/></button></div></div>}
+    {showInfo && <div className="modal-backdrop" onClick={() => setShowInfo(false)}><div className="about-modal" role="dialog" aria-modal="true" aria-label="About Buildora" onClick={(event) => event.stopPropagation()}><button className="close-modal" onClick={() => setShowInfo(false)} title="Close dialog" aria-label="Close"><X size={20}/></button><div className="about-mark"><img src="/buildora-mark.svg" alt="" /></div><h2>Buildora</h2><p>Describe an app, then explore its editable React files and live preview. The frontend sends requests to an Express API. Zap uses a private server-side Gemini connection to stream source code into our file parser.</p><p>Files are saved locally in this browser. Zap requires a private API key on the server. Public generation is disabled until secure access controls are added.</p><button className="blue-button" onClick={() => setShowInfo(false)}>Got it <Check size={16}/></button></div></div>}
   </div>;
 }
