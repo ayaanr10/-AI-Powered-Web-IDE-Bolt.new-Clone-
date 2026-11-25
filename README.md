@@ -175,6 +175,10 @@ Local API requests are not user-authenticated; the server binds to loopback and 
 | Imported project has missing images | ZIP imports intentionally support **text-based Vite project files**, not binary assets |
 | AI returned incomplete artifact | Retry with a smaller request or ask for fewer files; streaming parser intentionally rejects incomplete output |
 
+## Prepare to demonstrate Buildora
+
+Start with the [Beginner interview playbook](docs/BEGINNER_INTERVIEW_PLAYBOOK.md): follow a prompt from React to Gemini, explain why the parser and virtual filesystem exist, test the deployed Zap flow, and practise common interviewer follow-ups. Do not claim a live Gemini demo has passed until you personally see files generated and previewed.
+
 ## Interview and GitHub
 
 Start with the [Windows Gemini setup guide](docs/GEMINI_SETUP_WINDOWS.md), then read [Architecture](docs/ARCHITECTURE.md), [Interview Guide](docs/INTERVIEW_GUIDE.md), [Testing](docs/TEST_PLAN.md), and [GitHub Push Guide](docs/GITHUB_PUSH.md). Do not claim you have personally deployed or production-tested features you haven't actually run.

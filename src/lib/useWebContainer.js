@@ -10,7 +10,7 @@ export function useWebContainer() {
   const queue = useRef(Promise.resolve());
   const [status, setStatus] = useState('idle');
   const [previewUrl, setPreviewUrl] = useState('');
-  const [logs, setLogs] = useState(['Welcome to PromptForge Terminal', 'The browser runtime boots when you click Run project.']);
+  const [logs, setLogs] = useState(['Welcome to Buildora Terminal', 'The browser runtime boots when you click Run app.']);
   const [error, setError] = useState('');
 
   const log = useCallback((data) => {
