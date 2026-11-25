@@ -32,6 +32,7 @@ test('Gemini adapter streams text from arbitrarily split SSE frames', async () =
   assert.match(request.url, /gemini-2\.5-flash:streamGenerateContent\?alt=sse$/);
   assert.equal(request.init.headers['x-goog-api-key'], 'test-key');
   assert.equal(JSON.parse(request.init.body).contents[0].parts[0].text, 'build something');
+  assert.equal(JSON.parse(request.init.body).generationConfig.maxOutputTokens, 8192);
 });
 
 test('SSE parser handles CRLF, batched events and UTF-8 text split across bytes', async () => {

@@ -6,7 +6,7 @@ Use this alongside the real repository. **The goal is understanding, not memoriz
 
 Making even a small React web app normally means setting up source files, installing dependencies, writing components, running the application, and debugging. Buildora aims to shorten the **idea-to-prototype** loop: a user describes an app in plain English, Zap generates file changes, and the user edits and previews the result in the browser.
 
-**Scope:** educational single-user MVP. It is not a production competitor to Bolt.new, does not train its own AI model, does not deploy generated websites for customers, and does not provide cloud accounts or shared workspaces.
+**Scope:** educational MVP. It is not a production competitor to Bolt.new, does not train its own AI model, does not deploy generated websites for customers, and does not provide cloud accounts or shared workspaces. Public demo generation is anonymous and has strict per-browser, per-network, and shared daily limits.
 
 ## Say this in 40–60 seconds (adapt to your own words)
 
@@ -20,7 +20,7 @@ If you did not personally implement a component, say you studied/modified/tested
 | --- | --- | --- |
 | 1. Input | `src/App.jsx` | `prompt` is React state; `generate()` handles the request |
 | 2. HTTP | `src/lib/api.js` | `fetch('/api/generate')`, POST JSON, read NDJSON chunks |
-| 3. Backend | `server/index.js` | Validate prompt/files, check private code in production, rate limit, stream response |
+| 3. Backend | `server/index.js` | Validate prompt/files, check Turnstile and demo quotas, stream response |
 | 4. Model | `server/gemini.js` | Call Gemini's streaming REST endpoint using server-side `GEMINI_API_KEY`; parse SSE |
 | 5. Parsing | `shared/artifact-parser.js` | Buffer incomplete tags, output file/delete/message actions |
 | 6. Workspace | `src/App.jsx`, `shared/filesystem.js` | Validate and apply complete changes to `files`, autosave to browser localStorage |
@@ -52,7 +52,7 @@ fetch('/api/generate', {
 });
 ```
 
-On the private Render demo the real client also adds a private access-code header.
+On Render, the real client sends a short-lived Turnstile token after the visitor clicks Build. The backend verifies it with Cloudflare; the Gemini API key stays only on the server.
 
 **Virtual files**
 
@@ -75,9 +75,9 @@ The real code also parses, validates, and waits until generation completes befor
 ## A real demo checklist (do not skip)
 
 - [ ] Open Render service; latest deployed commit is green/Live
-- [ ] Open `https://buildora-ide-demo.onrender.com/api/health`; `zapAvailable` and `zapProtected` are `true`
+- [ ] Open `https://buildora-ide-demo.onrender.com/api/health`; `zapAvailable` is `true` and no server secret appears in the response
 - [ ] Check `GEMINI_MODEL` is an active model accessible to your key (e.g. `gemini-3.8-flash`, if your key supports it)
-- [ ] Open Buildora in desktop Chrome or Edge, refresh, enter **private** Zap access code (never share in screenshots)
+- [ ] Open Buildora in desktop Chrome or Edge and click Build now; complete the bot check if it appears
 - [ ] Prompt: "Build a simple counter with + and - buttons"
 - [ ] See generated/updated files, then click **Run app**
 - [ ] Confirm the app preview responds to clicks
@@ -85,7 +85,7 @@ The real code also parses, validates, and waits until generation completes befor
 - [ ] Export source ZIP
 - [ ] If any step fails, note the exact error and don't claim the end-to-end flow worked
 
-**Safety:** Set provider quota/spending controls; a shared code is only a limited private demo control, not full user authentication. Never publish your key or code.
+**Safety:** Keep the Gemini key on Express, use server-verified Turnstile, and enforce small server-side demo quotas. These counters live in process memory and reset when Render restarts, so they are suitable for a small demo only. Use Google's free Gemini tier if you cannot pay; app quotas are not a billing guarantee. Sustained access should add sign-in and durable per-account limits.
 
 ## Ten questions interviewers can ask
 
@@ -93,7 +93,7 @@ The real code also parses, validates, and waits until generation completes befor
 
 **Q2. Is Zap your own trained LLM?** No. Zap is a name for the AI-generation flow powered by Google's Gemini API.
 
-**Q3. Why Express?** It validates input, keeps the Gemini key private, applies basic rate limiting/access controls, and streams the model output.
+**Q3. Why Express?** It validates input, keeps the Gemini key private, verifies Turnstile, enforces shared server-side quotas, and streams the model output.
 
 **Q4. Why not put the API key in React?** Anyone can inspect frontend source/bundles and obtain it.
 
@@ -107,7 +107,7 @@ The real code also parses, validates, and waits until generation completes befor
 
 **Q9. How does a CSS edit reach the preview?** React updates `files`; `wc.sync` writes changed paths to WebContainer's filesystem; Vite HMR refreshes the app.
 
-**Q10. What are your limitations?** Single-browser localStorage, no account/cloud sync, not hardened for arbitrary untrusted packages, and no complete multi-user quota/authentication system.
+**Q10. What are your limitations?** Single-browser localStorage, no account/cloud sync, not hardened for arbitrary untrusted packages, and anonymous IP/browser quotas instead of per-account limits. Sign-in is the next step for sustained public access.
 
 ## If interviewer goes deeper
 
@@ -115,7 +115,7 @@ The real code also parses, validates, and waits until generation completes befor
 
 **What does `FALSE` or exact matching have to do with Buildora?** Nothing directly: that's an Excel lookup concept, not used by this project.
 
-**What would you improve first?** Reliable E2E browser tests, durable authentication/quotas, more robust structured output, undo/versions, and cloud persistence.
+**What would you improve first?** Reliable E2E browser tests, sign-in with per-account quotas, more robust structured output, undo/versions, and cloud persistence.
 
 ## Your study exercise
 

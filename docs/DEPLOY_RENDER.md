@@ -1,54 +1,59 @@
-# Buildora on Render — public preview
+# Buildora free demo on Render
 
-Buildora is a React frontend served by a Node/Express backend. The generated React preview runs with WebContainers in the browser. **Zap is the only generation option.** It uses the Gemini API on the server.
+Buildora runs as one Render web service. React serves the interface, Express calls Gemini, and WebContainers run the generated preview in each visitor's browser. The Gemini key stays on Express; it never enters React or the browser bundle.
 
-## Deploy the site
+## What the demo needs
 
-1. Use [Deploy to Render](https://render.com/deploy?repo=https://github.com/ayaanr10/-AI-Powered-Web-IDE-Bolt.new-Clone-), or open your existing Buildora Render service.
-2. Review the settings in `render.yaml`, which builds React with Vite and starts `node server/index.js`.
-3. Wait until Render shows **Live** and open its assigned URL.
-4. The home page, editable starter files, import/export, and browser preview work without an AI key.
+Keep the existing Render free web service. No paid database, Redis service, or extra session secret is needed.
 
-**Service naming:** The existing Render Blueprint still uses the historical service name `buildora-ide-demo` to avoid accidentally creating a second service. That name is not a generation mode, and no demo generator exists in the application.
+Set these values in the service's **Environment** page:
 
-## Enable Zap safely on your existing Render service
+| Variable | Value | Secret? |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | Your Google AI Studio API key | Yes; server only |
+| `GEMINI_MODEL` | A model available to your key | No |
+| `TURNSTILE_SITE_KEY` | Public key from a Cloudflare Turnstile widget | No |
+| `TURNSTILE_SECRET_KEY` | Secret key for that widget | Yes; server only |
 
-The site stays publicly visible, but generation requires a private code. Open the service's **Environment** tab:
+Create a Cloudflare Turnstile widget for the Render hostname, `buildora-ide-demo.onrender.com`. Turnstile has a free plan. Add both widget keys directly in Render; never put the secret key in frontend code, GitHub, or chat. The small invisible check runs when a visitor presses **Build now**. Express sends the token to Cloudflare for server-side verification.
 
-| Name | Value |
-| --- | --- |
-| `GEMINI_API_KEY` | Your **private** Google AI Studio key |
-| `GEMINI_MODEL` | `gemini-3.8-flash` (or another model your key can access) |
-| `PUBLIC_ZAP_ENABLED` | `1` |
-| `ZAP_ACCESS_CODE` | A unique randomly generated code of at least 16 characters |
+If a Gemini key already appears in Render's Environment page, keep it there. Do not click the reveal icon or share its value. Set `GEMINI_MODEL` to the model that is enabled for that key.
 
-Select **Save, rebuild, and deploy**. Never share these secrets in screenshots, GitHub, or chat.
+## Demo safety limits
 
-Once live, a **Private Zap access code** field appears on the Buildora home and workspace screens. Enter your code, then click Build now. The React app sends this code over HTTPS to the same-origin Express API; the server checks it before calling Gemini. Missing or incorrect codes return HTTP 401. The code is kept only in React memory and is cleared on refresh.
+The Express process checks the same-origin request, Turnstile result, trusted Render client IP, signed browser cookie, and a small in-memory quota before calling Gemini:
 
-The existing in-memory rate limiter adds basic protection but is not a substitute for strong authentication, durable per-user quotas or provider-side spending controls. This is a **private interview demo**, not an unrestricted public AI service. If the code is shared, disable Zap and change it.
+- 2 builds per network per hour and 4 per network per UTC day
+- 3 builds per browser per UTC day
+- 3 builds total per hour and 10 total per UTC day
+- 8 Turnstile checks per network per 10 minutes
+- One active build per browser, up to 8,192 output tokens and 3 minutes
 
-If the code is absent, shorter than 16 characters, or `PUBLIC_ZAP_ENABLED=0`, production Zap remains disabled.
+These counters live in the web service's memory. They reset when Render restarts or redeploys the service and are not a billing guarantee. Turnstile helps screen automated traffic, and the low app-wide limit keeps this demo small. This setup is for a portfolio demo, not a high-traffic public product.
 
-## Production architecture
+## Keep Gemini use free
 
-```
-GitHub -> Render builds frontend dist/ -> Express starts
-Express serves React files + /api/health + /api/generate
-React -> Zap prompt -> Express -> Gemini (private server key)
-                 response -> artifact parser -> editable files
-                 WebContainers -> npm + Vite -> preview iframe
-```
+Google offers a free Gemini API tier for eligible models and projects, with usage limits. Check that your key belongs to the free tier and that paid billing is not enabled if you cannot pay. The app's demo limits reduce requests, but only Google controls the API account's billing and quotas. Check the current [Gemini API pricing and free-tier details](https://ai.google.dev/gemini-api/docs/pricing) before sharing the public link.
 
-The service binds to Render's `PORT` on `0.0.0.0`, while the local API uses `127.0.0.1:3001`. Cross-origin isolation headers for WebContainers are set by Express:
+## Deploy and check
 
-- `Cross-Origin-Opener-Policy: same-origin`
-- `Cross-Origin-Embedder-Policy: credentialless`
+After the Environment values are saved, deploy the Buildora branch to Render. Open `/api/health`; it should report that Zap is available without returning any secret values. Then try a small prompt, confirm files appear, and run the preview in desktop Chrome or Edge.
+
+When bot protection is missing, Buildora explains that it is still being set up and keeps the editor and preview available. Gemini quota errors and temporary provider outages also have clear messages.
 
 ## Troubleshooting
 
-- **Zap shows Unavailable on Render:** Expected for the publicly accessible service.
-- **Zap shows Unavailable locally:** Check `.env`, restart `npm run dev`, and inspect `http://localhost:5173/api/health`.
-- **Gemini responds with HTTP 503:** The model is temporarily overloaded; the adapter retries twice with backoff and shows the error if it still fails.
-- **Preview won't run:** Check desktop Chrome/Edge compatibility, WebContainer logs and COOP/COEP settings.
-- **Render serves old code:** Check the deployed Git SHA or use **Manual Deploy -> Deploy latest commit** from the existing service.
+- **“Free bot protection is still being set up.”** Add both Turnstile keys to Render and confirm the widget allows the Buildora hostname.
+- **“Gemini has reached its current usage limit.”** Check the active model and free-tier quota in AI Studio.
+- **“Gemini is temporarily unavailable.”** Try again later; the provider may be busy.
+- **“Buildora has reached today’s shared build limit.”** The demo's 10-build shared daily cap resets at UTC midnight, or when the service restarts.
+- **Preview does not run.** Use desktop Chrome or Edge. WebContainers need the cross-origin isolation headers already set by the server.
+
+## Request flow
+
+```text
+React -> same-origin Express API -> Turnstile server verification
+                               -> in-memory demo limits
+                               -> Gemini API (server key only)
+Gemini stream -> Express NDJSON -> existing parser -> editor + WebContainer preview
+```

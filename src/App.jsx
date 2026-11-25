@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { css } from '@codemirror/lang-css';
@@ -70,15 +70,97 @@ function Indicator({ status }) {
   const [tone, label] = map[status] || map.idle;
   return <span className={'status-chip ' + tone}><span className="status-dot"/>{label}</span>;
 }
-// The access code lives only in React memory, not localStorage.
-function ZapAccessField({ value, onChange }) {
-  return <label className="zap-access-field">
-    <ShieldCheck size={17}/>
-    <span>Private Zap access code</span>
-    <input type="password" autoComplete="off" placeholder="Enter your code"
-      value={value} onChange={(event) => onChange(event.target.value)} />
-  </label>;
+let turnstileScriptPromise;
+function loadTurnstile() {
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (turnstileScriptPromise) return turnstileScriptPromise;
+  turnstileScriptPromise = new Promise((resolve, reject) => {
+    let script = document.getElementById('buildora-turnstile-script');
+    if (!script) {
+      script = document.createElement('script');
+      script.id = 'buildora-turnstile-script';
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+    script.addEventListener('load', () => window.turnstile ? resolve(window.turnstile) : reject(new Error('Security check did not start.')), { once: true });
+    script.addEventListener('error', () => reject(new Error('Security check did not load.')), { once: true });
+  });
+  return turnstileScriptPromise;
 }
+const SecurityCheck = forwardRef(function SecurityCheck({ siteKey }, forwardedRef) {
+  const containerRef = useRef(null);
+  const widgetRef = useRef(null);
+  const apiRef = useRef(null);
+  const pendingRef = useRef(null);
+  const readyRef = useRef(false);
+  useEffect(() => {
+    let active = true;
+    loadTurnstile().then((api) => {
+      if (!active || !containerRef.current) return;
+      apiRef.current = api;
+      widgetRef.current = api.render(containerRef.current, {
+        sitekey: siteKey,
+        action: 'build',
+        execution: 'execute',
+        appearance: 'interaction-only',
+        callback: (token) => {
+          readyRef.current = true;
+          const pending = pendingRef.current;
+          pendingRef.current = null;
+          if (pending) { clearTimeout(pending.timer); pending.resolve(token); }
+        },
+        'error-callback': () => {
+          readyRef.current = true;
+          const pending = pendingRef.current;
+          pendingRef.current = null;
+          if (pending) { clearTimeout(pending.timer); pending.reject(new Error('The quick security check could not be completed. Please try again.')); }
+        },
+        'expired-callback': () => {
+          readyRef.current = true;
+          const pending = pendingRef.current;
+          pendingRef.current = null;
+          if (pending) { clearTimeout(pending.timer); pending.reject(new Error('The security check expired. Please try again.')); }
+        },
+      });
+      readyRef.current = true;
+    }).catch(() => { readyRef.current = false; });
+    return () => {
+      active = false;
+      readyRef.current = false;
+      const pending = pendingRef.current;
+      pendingRef.current = null;
+      if (pending) { clearTimeout(pending.timer); pending.reject(new Error('The security check was closed.')); }
+      if (widgetRef.current !== null) apiRef.current?.remove(widgetRef.current);
+      widgetRef.current = null;
+    };
+  }, [siteKey]);
+  useImperativeHandle(forwardedRef, () => ({
+    execute() {
+      if (!readyRef.current || !apiRef.current || widgetRef.current === null) {
+        return Promise.reject(new Error('The quick security check is still loading. Please try again in a moment.'));
+      }
+      if (pendingRef.current) return Promise.reject(new Error('A security check is already running.'));
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pendingRef.current = null;
+          apiRef.current?.reset(widgetRef.current);
+          reject(new Error('The security check timed out. Please try again.'));
+        }, 45_000);
+        pendingRef.current = { resolve, reject, timer };
+        try { apiRef.current.execute(widgetRef.current); }
+        catch {
+          clearTimeout(timer);
+          pendingRef.current = null;
+          reject(new Error('The quick security check could not start. Please try again.'));
+        }
+      });
+    },
+    reset() { if (widgetRef.current !== null) apiRef.current?.reset(widgetRef.current); },
+  }), []);
+  return <div ref={containerRef} className="security-check-widget" aria-label="Automated abuse protection"/>;
+});
 function ChatMessage({ message }) {
   return <div className={'chat-message ' + message.role}>
     <div className="message-avatar">{message.role === 'user' ? 'Y' : <Sparkles size={15}/>}</div>
@@ -92,11 +174,12 @@ export default function App() {
   const [activeFile, setActiveFile] = useState('src/App.jsx');
   const [screen, setScreen] = useState('home');
   const [zapAvailable, setZapAvailable] = useState(false);
-  const [zapProtected, setZapProtected] = useState(false);
-  const [zapAccessCode, setZapAccessCode] = useState('');
+  const [requiresBotVerification, setRequiresBotVerification] = useState(false);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState('');
   const [zapMessage, setZapMessage] = useState('Connecting to Zap...');
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
+  const [securityChecking, setSecurityChecking] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showFullPreview, setShowFullPreview] = useState(false);
@@ -106,6 +189,7 @@ export default function App() {
   const scrollRef = useRef(null);
   const abortRef = useRef(null);
   const importRef = useRef(null);
+  const turnstileRef = useRef(null);
   const wc = useWebContainer();
 
   useEffect(() => { filesRef.current = files; try { localStorage.setItem(STORAGE_KEY, JSON.stringify(files)); } catch { /* storage full */ } }, [files]);
@@ -114,7 +198,8 @@ export default function App() {
       .then((response) => response.json())
       .then((data) => {
         setZapAvailable(Boolean(data.zapAvailable));
-        setZapProtected(Boolean(data.zapProtected));
+        setRequiresBotVerification(Boolean(data.requiresBotVerification));
+        setTurnstileSiteKey(data.turnstileSiteKey || '');
         setZapMessage(data.zapMessage || 'Zap is not configured on this server.');
       })
       .catch(() => {
@@ -170,10 +255,9 @@ export default function App() {
     catch (err) { setNotification(`Import failed: ${err.message}`); }
     finally { e.target.value = ''; }
   };
-  const canUseZap = zapAvailable && (!zapProtected || Boolean(zapAccessCode.trim()));
-  const zapStatus = !zapAvailable ? 'Unavailable' : zapProtected
-    ? (zapAccessCode.trim() ? 'Code entered' : 'Locked') : 'Ready';
-  const generate = async (text = prompt) => {
+  const canUseZap = zapAvailable;
+  const zapStatus = zapAvailable ? 'Ready' : 'Unavailable';
+  const runGeneration = async (text, turnstileToken = '') => {
     if (!text.trim() || busy || !canUseZap) return;
     const request = text.trim();
     // Zap is our product name; Google's Gemini runs privately on the server.
@@ -200,7 +284,7 @@ export default function App() {
         prompt: request,
         files: filesRef.current,
         signal: controller.signal,
-        accessCode: zapProtected ? zapAccessCode : '',
+        turnstileToken,
       })) {
         if (event.type === 'error') throw new Error(event.message);
         if (event.type === 'done') { finished = true; break; }
@@ -255,6 +339,24 @@ export default function App() {
     } finally {
       abortRef.current = null;
       setBusy(false);
+      turnstileRef.current?.reset();
+    }
+  };
+  const generate = async (text = prompt) => {
+    if (!text.trim() || busy || securityChecking || !canUseZap) return;
+    if (!requiresBotVerification) return runGeneration(text);
+    setSecurityChecking(true);
+    setGenerationError('');
+    try {
+      const token = await turnstileRef.current?.execute();
+      if (!token) throw new Error('The quick security check could not be completed. Please try again.');
+      await runGeneration(text, token);
+    } catch (error) {
+      setGenerationError(error.message || 'The quick security check could not be completed. Please try again.');
+      setNotification('Please retry the quick security check before building.');
+      turnstileRef.current?.reset();
+    } finally {
+      setSecurityChecking(false);
     }
   };
   const lastReply = [...messages].reverse().find((message) => message.role === 'assistant');
@@ -278,6 +380,7 @@ export default function App() {
         <button className="header-help" title="About Buildora" aria-label="About Buildora" onClick={() => setShowInfo(true)}><CircleHelp size={19}/></button>
       </div>
     </header>
+    {requiresBotVerification && turnstileSiteKey && <SecurityCheck ref={turnstileRef} siteKey={turnstileSiteKey}/>}
 
     {screen === 'home' ?
       <main className="home-layout">
@@ -286,7 +389,7 @@ export default function App() {
           <button className="sidebar-button selected" onClick={() => { setPrompt(''); setScreen('home'); }}><Plus size={17}/> New project</button>
           <button className="sidebar-button" onClick={() => setScreen('workspace')}><Code2 size={17}/> Open workspace</button>
           <div className="sidebar-label examples-label">GET STARTED</div>
-          {suggested.map((item) => <button key={item.title} className="sidebar-button template-link" onClick={() => generate(item.prompt)} disabled={busy || !canUseZap}><Sparkles size={15}/> {item.title}</button>)}
+          {suggested.map((item) => <button key={item.title} className="sidebar-button template-link" onClick={() => generate(item.prompt)} disabled={busy || securityChecking || !canUseZap}><Sparkles size={15}/> {item.title}</button>)}
           <div className="sidebar-tip"><ShieldCheck size={17}/><span>Projects are saved in this browser.</span></div>
         </aside>
         <section className="home-center">
@@ -295,14 +398,14 @@ export default function App() {
           <p className="home-description">Describe your idea. Buildora turns it into editable React code with a real browser preview.</p>
           <form className="home-prompt" onSubmit={(event) => { event.preventDefault(); generate(); }}>
             <textarea aria-label="Describe what you want to build" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask Buildora to build a portfolio, task manager, landing page..." rows={4} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); generate(); } }}/>
-            {zapAvailable && zapProtected && <ZapAccessField value={zapAccessCode} onChange={setZapAccessCode}/>}
             <div className="home-prompt-footer">
               <div className="zap-connection"><Zap size={16}/><strong>Zap</strong><span className={canUseZap ? 'zap-online' : 'zap-offline'}>{zapStatus}</span></div>
-              <button className="blue-button" type="submit" disabled={busy || !prompt.trim() || !canUseZap}>Build now <ArrowRight size={16}/></button>
+              <button className="blue-button" type="submit" disabled={busy || securityChecking || !prompt.trim() || !canUseZap}>{securityChecking ? 'Checking…' : 'Build now'} {!securityChecking && <ArrowRight size={16}/>}</button>
             </div>
+            {generationError && <p className="zap-setup-note generation-error" role="alert">{generationError}</p>}
             {!zapAvailable && <p className="zap-setup-note" role="status">{zapMessage}</p>}
           </form>
-          <div className="home-examples"><span>Try an example</span><div>{suggested.map((item) => <button key={item.title} onClick={() => generate(item.prompt)} disabled={busy || !canUseZap}>{item.title} <ArrowUp size={13}/></button>)}</div></div>
+          <div className="home-examples"><span>Try an example</span><div>{suggested.map((item) => <button key={item.title} onClick={() => generate(item.prompt)} disabled={busy || securityChecking || !canUseZap}>{item.title} <ArrowUp size={13}/></button>)}</div></div>
           <div className="home-footnote"><Check size={16}/> Edit the code <span/> <Check size={16}/> Run a preview <span/> <Check size={16}/> Export your project</div>
         </section>
       </main>
@@ -323,12 +426,11 @@ export default function App() {
             <form onSubmit={(event) => { event.preventDefault(); generate(); }}>
               <textarea aria-label="Describe what to build or change" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Build a task manager with add, complete and delete features..." rows={3} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); generate(); } }}/>
               {!zapAvailable && <p className="zap-setup-note" role="status">{zapMessage}</p>}
-              {zapAvailable && zapProtected && <ZapAccessField value={zapAccessCode} onChange={setZapAccessCode}/>}
               <div className="prompt-actions">
                 <div className="zap-connection"><Zap size={16}/><strong>Zap</strong><span className={canUseZap ? 'zap-online' : 'zap-offline'}>{zapStatus}</span></div>
                 <div className="prompt-action-buttons">
-                  {suggested.slice(0, 2).map((item) => <button type="button" className="prompt-suggestion" key={item.title} onClick={() => generate(item.prompt)} disabled={busy || !canUseZap}>+ {item.title}</button>)}
-                  <button type="submit" className="blue-button" disabled={!prompt.trim() || busy || !canUseZap}>{busy ? <><LoaderCircle size={16} className="spinning"/> Generating</> : <><Sparkles size={16}/> Generate</>}</button>
+                  {suggested.slice(0, 2).map((item) => <button type="button" className="prompt-suggestion" key={item.title} onClick={() => generate(item.prompt)} disabled={busy || securityChecking || !canUseZap}>+ {item.title}</button>)}
+                  <button type="submit" className="blue-button" disabled={!prompt.trim() || busy || securityChecking || !canUseZap}>{busy ? <><LoaderCircle size={16} className="spinning"/> Generating</> : securityChecking ? 'Checking…' : <><Sparkles size={16}/> Generate</>}</button>
                 </div>
               </div>
             </form>
@@ -370,6 +472,6 @@ export default function App() {
     </div>}
     <input ref={importRef} type="file" accept=".zip,application/zip" hidden onChange={importProject}/>
     {notification && <div className="app-toast" role="status"><Sparkles size={16}/><span>{notification}</span><button onClick={() => setNotification('')} aria-label="Dismiss notification"><X size={16}/></button></div>}
-    {showInfo && <div className="modal-backdrop" onClick={() => setShowInfo(false)}><div className="about-modal" role="dialog" aria-modal="true" aria-label="About Buildora" onClick={(event) => event.stopPropagation()}><button className="close-modal" onClick={() => setShowInfo(false)} title="Close dialog" aria-label="Close"><X size={20}/></button><div className="about-mark"><img src="/buildora-mark.svg" alt="" /></div><h2>Buildora</h2><p>Describe an app, then explore its editable React files and live preview. The frontend sends requests to an Express API. Zap uses a private server-side Gemini connection to stream source code into our file parser.</p><p>Files are saved locally in this browser. Zap requires a private API key on the server. Public generation is disabled until secure access controls are added.</p><button className="blue-button" onClick={() => setShowInfo(false)}>Got it <Check size={16}/></button></div></div>}
+    {showInfo && <div className="modal-backdrop" onClick={() => setShowInfo(false)}><div className="about-modal" role="dialog" aria-modal="true" aria-label="About Buildora" onClick={(event) => event.stopPropagation()}><button className="close-modal" onClick={() => setShowInfo(false)} title="Close dialog" aria-label="Close"><X size={20}/></button><div className="about-mark"><img src="/buildora-mark.svg" alt="" /></div><h2>Buildora</h2><p>Describe an app, then explore its editable React files and live preview. The frontend sends requests to an Express API. Zap uses a private server-side Gemini connection to stream source code into our file parser.</p><p>Projects are saved in this browser. Public builds use a quick bot check and shared daily limits to help keep the service available.</p><button className="blue-button" onClick={() => setShowInfo(false)}>Got it <Check size={16}/></button></div></div>}
   </div>;
 }

@@ -12,11 +12,6 @@ services:
         value: 22.16.0
       - key: NODE_ENV
         value: production
-      # Private Zap demo is enabled only if the server ALSO has:
-      # GEMINI_API_KEY and ZAP_ACCESS_CODE (at least 16 characters).
-      # Without both private credentials, the backend stays locked.
-      - key: PUBLIC_ZAP_ENABLED
-        value: "1"
-      # GEMINI_MODEL, GEMINI_API_KEY and ZAP_ACCESS_CODE are set
-      # privately on the existing service's Render Environment page.
-      # Do not commit secret values to this Blueprint.
+      # Set these in the Render Environment page before public generation is enabled:
+      # GEMINI_API_KEY, GEMINI_MODEL, TURNSTILE_SITE_KEY, and TURNSTILE_SECRET_KEY.
+      # Secret values must never be committed to this Blueprint or frontend bundle.
