@@ -16,7 +16,7 @@ Start with the [simple Buildora walkthrough](docs/BUILDORA_SIMPLE_GUIDE.md) befo
 
 **[Deploy to Render](https://render.com/deploy?repo=https://github.com/ayaanr10/-AI-Powered-Web-IDE-Bolt.new-Clone-)**
 
-This link uses the included `render.yaml` Blueprint to create a free Render web service. **Zap is the only generator**. On the public Render preview, Zap stays disabled by default; editing and preview still work. You can optionally enable a **private access-code-protected Zap demo** with Render environment variables. Do not expose your Gemini key or access code.
+This link uses the included `render.yaml` Blueprint to create the Buildora web service. **Zap is the only generator.** The interface is public; generation becomes available after the server has a private Gemini key, persistent shared quota storage, a session signing key, and Cloudflare Turnstile settings. Until all safeguards are ready, the editor and preview still work while generation remains unavailable.
 
 See [step-by-step Render deployment](docs/DEPLOY_RENDER.md). After Render shows **Live**, open the URL assigned to your service. The public URL is not known until you complete deployment in your Render account.
 
@@ -27,9 +27,10 @@ See [step-by-step Render deployment](docs/DEPLOY_RENDER.md). After Render shows 
 - **Editable virtual filesystem.** Folder tree, source editing with syntax highlighting, new/delete files, live HMR sync, local autosave, import/export ZIP.
 - **Actual browser runtime.** WebContainers boot Node.js inside the browser, install packages, start Vite, and display the running app in an iframe; terminal shows process output.
 - **Zap-only generation.** Every generation request calls the server-side Gemini adapter. No template generation or demo-mode fallback.
+- **Public generation safeguards.** Production fails closed without Redis-backed shared rate limits and quotas, a signed anonymous browser ID, a same-origin request, and a server-verified Turnstile token.
 - **Tests and documentation.** Node built-in tests for parser boundaries, file-path safety, server validation, and Gemini adapter retries.
 
-**Scope:** A usable local **MVP**, not all of Bolt.new. This does not include collaboration, authentication, production-grade hosting, command-running AI agents, cloud persistence, billing, or an audited sandbox. Preview uses the browser-native WebContainers runtime, not a remotely hosted VM.
+**Scope:** A usable educational **MVP**, not all of Bolt.new. This does not include collaboration, account sign-in, cloud workspaces, billing, or an audited sandbox. Public use is anonymous and tightly capped; sustained access should add sign-in and per-account quotas. Preview uses the browser-native WebContainers runtime, not a remotely hosted VM.
 
 ## Quick start
 
@@ -139,7 +140,9 @@ Parser notes: The outer artifact can nest child tags. `parseXmlTree` is **recurs
 | `src/lib/useWebContainer.js` | WebContainer boot, install, start, file sync, terminal logs |
 | `src/lib/api.js` | Streaming newline-delimited JSON fetch client |
 | `src/lib/archive.js` | ZIP import/export (client-side) |
-| `server/index.js` | Express routes, request validation, rate limiting, NDJSON transport |
+| `server/index.js` | Express routes, request validation, shared usage limits, NDJSON transport |
+| `server/security.js` | Signed anonymous browser cookies, same-origin checks, Turnstile verification |
+| `server/usage-store.js` | Atomic Redis quota counters and per-browser generation locks |
 | `server/gemini.js` | Provider adapter: Gemini SSE streaming, errors, and aborts |
 | `server/prompts.js` | System protocol prompt and bounded workspace context |
 | `shared/artifact-parser.js` | Recursive parser + incremental action extraction |
@@ -162,7 +165,7 @@ npm run preview   # Vite frontend preview (API must be running separately)
 
 WebContainers require `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` (or `require-corp`) so the browser exposes `SharedArrayBuffer`. `vite.config.js` sets those development and preview headers. **Open via localhost/HTTPS, never `file://`.** Desktop Chromium is the primary supported environment; third-party cookie restrictions and browser extensions can interfere. When deploying the front end, configure the **same headers** on the hosting service and provide a secure backend for `/api`.
 
-Local API requests are not user-authenticated; the server binds to loopback and uses a simple in-memory rate limiter. Do not publish this MVP as an unrestricted public AI API without authentication, durable rate limits, further sandbox security assessment, and billing protections.
+Local API requests run on loopback and use a small process-local limiter. In production, generation is disabled unless Redis and Turnstile are configured; production limits are shared across Render restarts and instances. The app uses strict anonymous IP/browser quotas instead of login, so it is suitable for a small demo, not sustained public scale. Configure Gemini's project-level rate limits and a provider-side spend cap before enabling paid usage. Generated projects still run in the user's browser; this project is not a security-audited sandbox.
 
 ## Troubleshooting
 
@@ -170,6 +173,8 @@ Local API requests are not user-authenticated; the server binds to loopback and 
 | --- | --- |
 | Preview says cross-origin isolation missing | Use Chrome/Edge at `http://localhost:5173`, ensure Vite sets COOP/COEP, disable interfering extensions |
 | "Live AI needs GEMINI_API_KEY" | Put the key in `.env` and restart `npm run dev` (never in browser `VITE_*` variables) |
+| Public Render generation is unavailable | Follow [Render setup](docs/DEPLOY_RENDER.md) for persistent `REDIS_URL`, `SESSION_SECRET`, and the two Turnstile values; production stays closed until all are ready |
+| Build limit reached | Per-browser, per-network, and shared app quotas reset daily at UTC midnight; Gemini may also enforce project-level limits |
 | Preview install fails | Open Terminal, verify internet/npm availability and valid dependencies; then Restart |
 | Changes don't appear | Confirm runtime status is Ready; Restart after editing `package.json` |
 | Imported project has missing images | ZIP imports intentionally support **text-based Vite project files**, not binary assets |
@@ -191,7 +196,9 @@ Start with the [Windows Gemini setup guide](docs/GEMINI_SETUP_WINDOWS.md), then 
 
 - [WebContainer API](https://webcontainers.io/api) and [COOP/COEP headers](https://webcontainers.io/guides/configuring-headers)
 - [Gemini streaming REST API](https://ai.google.dev/api/generate-content) and [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits)
-- [Gemini streaming REST API](https://ai.google.dev/api/generate-content) and [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits)
+- [Cloudflare Turnstile server-side validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/)
+- [Render private networking](https://render.com/docs/private-network) and [Key Value](https://render.com/docs/key-value)
+- [Google Cloud Gemini API spend caps](https://docs.cloud.google.com/billing/docs/how-to/budgets-spend-caps)
 
 ## License
 
