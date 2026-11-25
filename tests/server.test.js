@@ -9,8 +9,6 @@ const productionEnv = () => ({
   NODE_ENV: 'production',
   GEMINI_API_KEY: 'server-only-test-gemini-key',
   GEMINI_MODEL: 'gemini-test',
-  REDIS_URL: 'redis://test-store.invalid',
-  SESSION_SECRET: 'test-session-secret-that-is-long-enough-1234567890',
   TURNSTILE_SITE_KEY: 'public-test-site-key',
   TURNSTILE_SECRET_KEY: 'server-only-test-turnstile-key',
 });
@@ -69,16 +67,16 @@ test('health does not disclose secrets and reports production setup state', asyn
   });
 });
 
-test('production fails closed when a durable store or public safety settings are missing', async () => {
-  const env = { ...productionEnv(), REDIS_URL: '', TURNSTILE_SECRET_KEY: '', SESSION_SECRET: '' };
+test('production fails closed until free bot protection is configured', async () => {
+  const env = { ...productionEnv(), TURNSTILE_SITE_KEY: '', TURNSTILE_SECRET_KEY: '' };
   const app = createApp({ env, geminiStreamer: async function* () { throw new Error('must not run'); } });
   await withServer(app, async (base) => {
     const health = await fetch(base + '/api/health').then((r) => r.json());
     assert.equal(health.zapAvailable, false);
-    assert.match(health.zapMessage, /safety checks/);
+    assert.match(health.zapMessage, /bot protection/);
     const response = await buildRequest(base);
     assert.equal(response.status, 503);
-    assert.match((await response.json()).error, /safety checks/);
+    assert.match((await response.json()).error, /bot protection/);
   });
 });
 

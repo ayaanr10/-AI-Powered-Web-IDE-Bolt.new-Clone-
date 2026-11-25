@@ -1,67 +1,59 @@
-# Buildora on Render
+# Buildora free demo on Render
 
-Buildora serves the React interface and its Express API from one Render web service. The browser preview runs inside WebContainers. Zap uses Gemini through the server; the Gemini key never enters React, browser storage, or generated bundles.
+Buildora runs as one Render web service. React serves the interface, Express calls Gemini, and WebContainers run the generated preview in each visitor's browser. The Gemini key stays on Express; it never enters React or the browser bundle.
 
-## Before enabling public generation
+## What the demo needs
 
-The current Render service is a free web service. Public generation is deliberately unavailable until its abuse controls are configured. The service must have all of these values set in its **Environment** page:
+Keep the existing Render free web service. No paid database, Redis service, or extra session secret is needed.
 
-| Variable | Where it comes from | Secret? |
+Set these values in the service's **Environment** page:
+
+| Variable | Value | Secret? |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | Google AI Studio API key | Yes; server only |
-| `GEMINI_MODEL` | A model enabled for the key | No |
-| `REDIS_URL` | Internal connection string for a persistent Render Key Value instance in Oregon | Yes; server only |
-| `SESSION_SECRET` | A randomly generated 32-byte or longer secret | Yes; server only |
-| `TURNSTILE_SITE_KEY` | Cloudflare Turnstile widget configured for `buildora-ide-demo.onrender.com` | Public widget setting |
-| `TURNSTILE_SECRET_KEY` | The same widget's secret key | Yes; server only |
+| `GEMINI_API_KEY` | Your Google AI Studio API key | Yes; server only |
+| `GEMINI_MODEL` | A model available to your key | No |
+| `TURNSTILE_SITE_KEY` | Public key from a Cloudflare Turnstile widget | No |
+| `TURNSTILE_SECRET_KEY` | Secret key for that widget | Yes; server only |
 
-Create a persistent Key Value instance in the same Render workspace and region as the web service, and keep it private to Render's internal network. Buildora uses it for shared, atomic quotas and request locks. Render's free web service can initiate a private network connection to a same-region Key Value instance; use the internal connection URL shown by Render. Do not use an in-memory/free store for the live service: its counters disappear when the store restarts. Review Render's current price before creating a persistent instance; this repo does not create one automatically. See [Render's private network guide](https://render.com/docs/private-network) and [Key Value guide](https://render.com/docs/key-value).
+Create a Cloudflare Turnstile widget for the Render hostname, `buildora-ide-demo.onrender.com`. Turnstile has a free plan. Add both widget keys directly in Render; never put the secret key in frontend code, GitHub, or chat. The small invisible check runs when a visitor presses **Build now**. Express sends the token to Cloudflare for server-side verification.
 
-Create a Cloudflare Turnstile widget for the Render hostname (and any custom domain you later add). Turnstile runs when someone starts a build and usually does not require a visible puzzle. Express sends the token to Cloudflare's Siteverify endpoint and rejects the request unless Cloudflare verifies the `build` action and hostname. The frontend widget by itself is not treated as protection. See [Cloudflare's server-side validation guide](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/).
+If a Gemini key already appears in Render's Environment page, keep it there. Do not click the reveal icon or share its value. Set `GEMINI_MODEL` to the model that is enabled for that key.
 
-Generate a session signing key locally, then paste the output directly into Render's Environment page. Never commit or send it in chat:
+## Demo safety limits
 
-```bash
-openssl rand -hex 32
-```
+The Express process checks the same-origin request, Turnstile result, trusted Render client IP, signed browser cookie, and a small in-memory quota before calling Gemini:
 
-After saving the variables, deploy the app and check `/api/health`. It returns only whether generation is available, a public Turnstile site key, and the model name. It never returns the Gemini or Turnstile secret, Redis URL, or signing key. If the safety services are missing or unreachable, the editor remains available and generation fails closed.
+- 2 builds per network per hour and 4 per network per UTC day
+- 3 builds per browser per UTC day
+- 3 builds total per hour and 10 total per UTC day
+- 8 Turnstile checks per network per 10 minutes
+- One active build per browser, up to 8,192 output tokens and 3 minutes
 
-## Abuse limits
+These counters live in the web service's memory. They reset when Render restarts or redeploys the service and are not a billing guarantee. Turnstile helps screen automated traffic, and the low app-wide limit keeps this demo small. This setup is for a portfolio demo, not a high-traffic public product.
 
-The production backend enforces shared Redis limits before contacting Gemini:
+## Keep Gemini use free
 
-- 4 builds per IP per hour and 10 per IP per UTC day
-- 5 builds per signed anonymous browser per UTC day
-- 8 builds for the whole app per hour and 25 per UTC day
-- 12 bot-verification attempts per IP per 10 minutes
-- One active generation per browser; each request has an output-token limit and a maximum run time
+Google offers a free Gemini API tier for eligible models and projects, with usage limits. Check that your key belongs to the free tier and that paid billing is not enabled if you cannot pay. The app's demo limits reduce requests, but only Google controls the API account's billing and quotas. Check the current [Gemini API pricing and free-tier details](https://ai.google.dev/gemini-api/docs/pricing) before sharing the public link.
 
-Anonymous usage is tied to a signed, HttpOnly, Secure, SameSite cookie and a one-way hash of Render's Cloudflare `CF-Connecting-IP` client address. Buildora does not trust a caller-supplied `X-Forwarded-For` value for quotas, and generation fails closed if the trusted edge address is missing. Clearing the browser cookie does not remove the IP or shared app limits. These controls are for a small public demo; sustained growth should add sign-in and per-account quotas. See [Render's client-IP and rate-limit guidance](https://render.com/articles/how-render-handles-ddos-attacks).
+## Deploy and check
 
-## Gemini-side limits
+After the Environment values are saved, deploy the Buildora branch to Render. Open `/api/health`; it should report that Zap is available without returning any secret values. Then try a small prompt, confirm files appear, and run the preview in desktop Chrome or Edge.
 
-Check the active model's RPM, TPM, and RPD limits in [Google AI Studio](https://aistudio.google.com/rate-limit). They vary by project, tier, and model. Configure a Gemini API [spend cap](https://docs.cloud.google.com/billing/docs/how-to/budgets-spend-caps) for the linked project when eligible, in addition to the application limits. A cap pauses new Gemini API use when its configured monthly target is reached; usage reporting has some latency, so set it below the maximum amount you are comfortable spending. This provider-side control cannot be configured from this repository because it belongs to the Google project/billing account.
-
-## Deploy process
-
-The existing service is linked to `main` and has automatic deploys enabled. Run `npm run check` before updating that branch. A push or merge to `main` starts the Render deploy; do not also trigger a manual deploy for the same commit. The configured health check is `/api/health`.
+When bot protection is missing, Buildora explains that it is still being set up and keeps the editor and preview available. Gemini quota errors and temporary provider outages also have clear messages.
 
 ## Troubleshooting
 
-- **“Public safety checks are still being configured.”** Add `REDIS_URL`, `SESSION_SECRET`, and both Turnstile variables on Render. Check that the Key Value instance is running in Oregon.
-- **“Buildora security checks are connecting.”** Wait for the Key Value instance to become ready, then refresh the page.
-- **“Please complete the quick security check.”** Allow Cloudflare challenge scripts for `challenges.cloudflare.com`; refresh to get a fresh token.
-- **“Buildora reached today’s shared build limit.”** The global cap is shared by all visitors and resets at UTC midnight.
-- **“Gemini has reached its current usage limit.”** Check the active project and model quotas in AI Studio.
-- **Gemini is unavailable.** The provider may be overloaded; try later. Buildora retries temporary Gemini 503 responses before showing this message.
-- **Preview won't run.** Use desktop Chrome or Edge, then check the WebContainer terminal. The service sets COOP/COEP headers required by WebContainers.
+- **“Free bot protection is still being set up.”** Add both Turnstile keys to Render and confirm the widget allows the Buildora hostname.
+- **“Gemini has reached its current usage limit.”** Check the active model and free-tier quota in AI Studio.
+- **“Gemini is temporarily unavailable.”** Try again later; the provider may be busy.
+- **“Buildora has reached today’s shared build limit.”** The demo's 10-build shared daily cap resets at UTC midnight, or when the service restarts.
+- **Preview does not run.** Use desktop Chrome or Edge. WebContainers need the cross-origin isolation headers already set by the server.
 
 ## Request flow
 
 ```text
-React -> same-origin Express API -> Turnstile Siteverify
-                               -> Redis atomic quotas + browser lock
+React -> same-origin Express API -> Turnstile server verification
+                               -> in-memory demo limits
                                -> Gemini API (server key only)
 Gemini stream -> Express NDJSON -> existing parser -> editor + WebContainer preview
 ```

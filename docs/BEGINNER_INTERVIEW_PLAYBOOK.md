@@ -20,7 +20,7 @@ If you did not personally implement a component, say you studied/modified/tested
 | --- | --- | --- |
 | 1. Input | `src/App.jsx` | `prompt` is React state; `generate()` handles the request |
 | 2. HTTP | `src/lib/api.js` | `fetch('/api/generate')`, POST JSON, read NDJSON chunks |
-| 3. Backend | `server/index.js` | Validate prompt/files, check Turnstile and Redis quotas, stream response |
+| 3. Backend | `server/index.js` | Validate prompt/files, check Turnstile and demo quotas, stream response |
 | 4. Model | `server/gemini.js` | Call Gemini's streaming REST endpoint using server-side `GEMINI_API_KEY`; parse SSE |
 | 5. Parsing | `shared/artifact-parser.js` | Buffer incomplete tags, output file/delete/message actions |
 | 6. Workspace | `src/App.jsx`, `shared/filesystem.js` | Validate and apply complete changes to `files`, autosave to browser localStorage |
@@ -85,7 +85,7 @@ The real code also parses, validates, and waits until generation completes befor
 - [ ] Export source ZIP
 - [ ] If any step fails, note the exact error and don't claim the end-to-end flow worked
 
-**Safety:** Configure Redis-backed limits, Turnstile, and a Gemini project spend cap before enabling public generation. Never publish server keys. Anonymous quotas are suitable for a small demo; sustained access should add sign-in and per-account limits.
+**Safety:** Keep the Gemini key on Express, use server-verified Turnstile, and enforce small server-side demo quotas. These counters live in process memory and reset when Render restarts, so they are suitable for a small demo only. Use Google's free Gemini tier if you cannot pay; app quotas are not a billing guarantee. Sustained access should add sign-in and durable per-account limits.
 
 ## Ten questions interviewers can ask
 

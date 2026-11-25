@@ -14,7 +14,7 @@ This runs the Node test suite and Vite production build. Tests cover:
 - File and directory safety, file-count limits, and WebContainer mount trees
 - Gemini SSE parsing, 503 retry/backoff, output limits, and provider errors
 - Turnstile server verification, signed browser identity, and same-origin checks
-- Production fail-closed behavior when Redis, Turnstile, or Gemini is missing
+- Production fail-closed behavior when Turnstile or Gemini is missing
 - Atomic rate and daily quota behavior, request locks, quota error messages, and Gemini error handling
 - API-key non-disclosure and the absence of owner-code headers in the client
 
@@ -31,18 +31,17 @@ No tests call a real Gemini API, Cloudflare account, or Render service.
 - [ ] Export a ZIP, import a project, then restart its preview.
 - [ ] Confirm the API key never appears in browser requests or the Vite bundle.
 
-## Production security checks before enabling public builds
+## Free demo checks before enabling public builds
 
-- [ ] Configure a persistent Render Key Value instance in the same region and wire its private internal URL as `REDIS_URL`.
-- [ ] Add a random 32-byte `SESSION_SECRET` and the Gemini key only to Render's server environment.
-- [ ] Configure a Cloudflare Turnstile widget for the live hostname; set its site key and secret in Render.
-- [ ] Verify Gemini's active project RPM/TPM/RPD limits and configure a project spend cap in AI Studio or Google Cloud Billing when available.
+- [ ] Keep the existing free Render web service; no paid database or cache is needed.
+- [ ] Add the Gemini key only to Render's server environment.
+- [ ] Configure a free Cloudflare Turnstile widget for the live hostname; set its site key and secret in Render.
+- [ ] Confirm the Gemini key uses an eligible free-tier model/project if the demo must not incur charges.
 - [ ] Confirm `/api/health` returns `zapAvailable: true`; no server secret should appear in its JSON.
 - [ ] Submit without a Turnstile token and confirm the backend rejects the request before Gemini.
 - [ ] Submit with a valid token and confirm one build succeeds.
 - [ ] Repeat until an IP/browser limit is reached; confirm HTTP 429 and a clear retry message.
-- [ ] Temporarily stop Redis and confirm generation returns a safe unavailable message without calling Gemini.
 - [ ] Use an invalid/expired Turnstile token and confirm it is rejected.
 - [ ] Check Render logs and browser network traffic for secrets; none should appear.
 
-**Limit:** Automated tests prove code behavior with fakes, not that the live Turnstile widget, Redis service, Gemini key, provider budget, or deployed Render service are configured correctly. Complete the manual production checks after the environment setup.
+**Limit:** Automated tests prove code behavior with fakes, not that the live Turnstile widget, Gemini key, free-tier quota, or deployed Render service are configured correctly. In-memory limits reset on a Render restart and are not a hard billing cap.

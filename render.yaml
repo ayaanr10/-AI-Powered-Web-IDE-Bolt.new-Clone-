@@ -13,6 +13,5 @@ services:
       - key: NODE_ENV
         value: production
       # Set these in the Render Environment page before public generation is enabled:
-      # GEMINI_API_KEY, GEMINI_MODEL, REDIS_URL, SESSION_SECRET,
-      # TURNSTILE_SITE_KEY, and TURNSTILE_SECRET_KEY.
+      # GEMINI_API_KEY, GEMINI_MODEL, TURNSTILE_SITE_KEY, and TURNSTILE_SECRET_KEY.
       # Secret values must never be committed to this Blueprint or frontend bundle.

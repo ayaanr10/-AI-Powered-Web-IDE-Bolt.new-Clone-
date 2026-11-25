@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { isIP } from 'node:net';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,19 +8,19 @@ import { validateFiles } from '../shared/filesystem.js';
 import { SYSTEM_PROMPT, makeUserPrompt } from './prompts.js';
 import { streamGeminiText } from './gemini.js';
 import { getBrowserId, hashRateLimitIdentity, isSameOriginRequest, VerificationUnavailableError, verifyTurnstile } from './security.js';
-import { MemoryUsageStore, RedisUsageStore } from './usage-store.js';
+import { MemoryUsageStore } from './usage-store.js';
 
 const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
 const MAX_GENERATION_SECONDS = 180;
 const LOCK_SECONDS = 240;
 const MAX_OUTPUT_TOKENS = 8192;
 const LIMITS = Object.freeze({
-  verificationPerIpWindow: 12,
-  generationsPerIpWindow: 4,
-  generationsPerIpDay: 10,
-  generationsPerBrowserDay: 5,
-  generationsPerAppWindow: 8,
-  generationsPerAppDay: 25,
+  verificationPerIpWindow: 8,
+  generationsPerIpWindow: 2,
+  generationsPerIpDay: 4,
+  generationsPerBrowserDay: 3,
+  generationsPerAppWindow: 3,
+  generationsPerAppDay: 10,
 });
 
 function secondsUntilNextUtcHour(now) {
@@ -48,8 +48,8 @@ function clientIp(req, production) {
 function readiness({ env, production, store }) {
   if (!env.GEMINI_API_KEY) return { available: false, message: 'AI generation is not configured yet. Your editor and preview are still available.' };
   if (!production) return { available: true, message: 'Zap is ready.' };
-  if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32 || !turnstileConfigured(env) || !env.REDIS_URL) {
-    return { available: false, message: 'Public safety checks are still being configured. Your editor and preview are still available.' };
+  if (!turnstileConfigured(env)) {
+    return { available: false, message: 'Free bot protection is still being set up. Your editor and preview are still available.' };
   }
   if (!store?.isReady()) return { available: false, message: 'Buildora security checks are connecting. Please try again shortly.' };
   return { available: true, message: 'Zap is ready.' };
@@ -71,9 +71,8 @@ function publicGenerationError(error) {
   return 'Buildora could not finish this build. Please try again with a clearer request.';
 }
 
-function createUsageStore(env, production, injectedStore) {
+function createUsageStore(injectedStore) {
   if (injectedStore) return injectedStore;
-  if (production) return env.REDIS_URL ? new RedisUsageStore(env.REDIS_URL) : null;
   return new MemoryUsageStore();
 }
 
@@ -84,6 +83,7 @@ function quotaMessage(name) {
   if (name === 'ipDay') return 'This network has reached today’s build limit. Please try again tomorrow.';
   if (name === 'browserDay') return 'You’ve reached today’s build limit in this browser. Please try again tomorrow.';
   if (name === 'verification') return 'Too many security checks came from this network. Please wait a few minutes.';
+  if (name === 'storeBusy') return 'Buildora is temporarily limiting new builds. Please try again in a minute.';
   if (name === 'inFlight') return 'A build is already running in this browser. Wait for it to finish before starting another.';
   return 'Buildora is temporarily limiting requests. Please try again shortly.';
 }
@@ -97,8 +97,10 @@ export function createApp({
   limits = LIMITS,
 } = {}) {
   const production = env.NODE_ENV === 'production';
-  const store = createUsageStore(env, production, usageStore);
-  const sessionSecret = env.SESSION_SECRET || 'buildora-local-session-secret-not-for-production';
+  const store = createUsageStore(usageStore);
+  // Keep setup simple: derive the signed-cookie key from the server-only Gemini key.
+  const sessionSecret = createHmac('sha256', env.GEMINI_API_KEY || 'buildora-local-demo')
+    .update('buildora-anonymous-demo-session-v1').digest('hex');
   const turnstileEnabled = production && turnstileConfigured(env);
   const app = express();
 
@@ -114,9 +116,7 @@ export function createApp({
 
   app.get('/api/health', (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    if (!production || (env.SESSION_SECRET && env.SESSION_SECRET.length >= 32)) {
-      getBrowserId(req, res, { secret: sessionSecret, secure: production });
-    }
+    getBrowserId(req, res, { secret: sessionSecret, secure: production });
     const state = readiness({ env, production, store });
     res.json({
       ok: true,

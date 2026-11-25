@@ -88,6 +88,15 @@ test('memory quotas check a batch atomically and reset after their TTL', async (
   assert.equal((await store.consume([{ key: 'browser:day', name: 'browserDay', limit: 1, ttlSeconds: 10 }])).allowed, true);
 });
 
+test('memory quota capacity fails closed without evicting active counters', async () => {
+  const store = new MemoryUsageStore();
+  store.maxValues = 1;
+  assert.equal((await store.consume([{ key: 'app:day', name: 'appDay', limit: 1, ttlSeconds: 60 }])).allowed, true);
+  const overflow = await store.consume([{ key: 'new-ip:day', name: 'ipDay', limit: 4, ttlSeconds: 60 }]);
+  assert.deepEqual(overflow, { allowed: false, name: 'storeBusy', retryAfterSeconds: 60 });
+  assert.equal((await store.consume([{ key: 'app:day', name: 'appDay', limit: 1, ttlSeconds: 60 }])).allowed, false);
+});
+
 test('generation locks allow only one active request and are released by their owner', async () => {
   const store = new MemoryUsageStore();
   assert.equal(await store.acquireLock('browser:lock', 'token-a', 30), true);
