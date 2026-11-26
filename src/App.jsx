@@ -186,11 +186,22 @@ export default function App() {
 
     try {
       let finished = false;
+      let projectReceived = false;
       for await (const event of generateStream({
         prompt: request,
         files: filesRef.current,
         signal: controller.signal,
       })) {
+        if (event.type === 'progress') {
+          setMessages(old=>[...old.slice(0,-1),{role:'assistant',text:event.message}]);
+          continue;
+        }
+        if (event.type === 'project') {
+          if (!Array.isArray(event.actions)) throw new Error('Invalid project response.');
+          pendingActions.length=0; pendingActions.push(...event.actions);
+          responseMessage=event.message; projectReceived=true;
+          continue;
+        }
         if (event.type === 'restart') {
           parser = new StreamingArtifactParser(); pendingActions.length = 0; responseMessage = '';
           setMessages(old => [...old.slice(0,-1), {role:'assistant',text:'Trying a backup AI model…'}]);
@@ -215,7 +226,7 @@ export default function App() {
       }
 
       if (!finished) throw new Error('The generation connection closed before completion.');
-      parser.finish();
+      if (!projectReceived) parser.finish();
       if (!pendingActions.length) throw new Error('No project files were generated. Try a more specific request.');
 
       const updated = { ...filesRef.current };

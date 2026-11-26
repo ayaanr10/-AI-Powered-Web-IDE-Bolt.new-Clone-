@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import { streamGeminiWithFallback } from './gemini.js';
+import { generateValidatedProject } from './project-generation.js';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,8 +9,6 @@ const zapAvailable = () => Boolean(process.env.GEMINI_API_KEY?.trim());
 const zapMessage = () => zapAvailable() ? 'AI builder is ready.' : 'AI builder is not configured on the server.';
 const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
 import { validateFiles } from '../shared/filesystem.js';
-import { StreamingArtifactParser } from '../shared/artifact-parser.js';
-import { SYSTEM_PROMPT, makeUserPrompt } from './prompts.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -50,7 +48,7 @@ function throttle(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, zapAvailable: zapAvailable(), zapProtected: false, zapMessage: zapMessage(), model: process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite' });
+  res.json({ ok: true, zapAvailable: zapAvailable(), zapProtected: false, zapMessage: zapMessage(), model: process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite', generationProtocol:'validated-json-v1' });
 });
 
 app.post('/api/generate', async (req, res, next) => {
@@ -83,28 +81,15 @@ app.post('/api/generate', async (req, res, next) => {
   const deadline = setTimeout(() => controller.abort(new Error('Build timed out. Try a smaller prompt.')), 125000);
   res.on('close', () => controller.abort());
   try {
-    // Zap is the only generation workflow. The key never reaches React.
-    let parser = new StreamingArtifactParser();
-    let changes = 0;
-    let complete = false;
-    for await (const text of streamGeminiWithFallback({
-      apiKey: process.env.GEMINI_API_KEY,
-      model: process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite',
-      fallbackModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
-      systemPrompt: SYSTEM_PROMPT,
-      userPrompt: makeUserPrompt(prompt, files),
-      signal: controller.signal,
-      onRestart: () => { parser = new StreamingArtifactParser(); changes = 0; send({type:'restart'}); },
-    })) {
-      if (cancelled) break;
-      const actions = parser.push(text);
-      changes += actions.filter(action => action.type !== 'message').length;
-      send({ type: 'chunk', text });
-      if (parser.finished) { complete = true; break; }
-    }
-    if (!cancelled) {
-      if (!complete || !changes) throw new Error('AI did not return a complete project. Please retry.');
-      send({ type: 'done' });
+    const project=await generateValidatedProject({
+      apiKey:process.env.GEMINI_API_KEY,
+      models:[process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite',process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash'],
+      prompt,files,signal:controller.signal,
+      onProgress:message=>send({type:'progress',message}),
+    });
+    if(!cancelled){
+      send({type:'project',message:project.message,actions:project.actions});
+      send({type:'done'});
     }
   } catch (err) {
     console.warn('Buildora generation failed:', err.name, err.code || '');

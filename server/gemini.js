@@ -53,7 +53,7 @@ function eventText(data) {
 
 export async function* streamGeminiText({
   apiKey, model = 'gemini-3.8-flash', systemPrompt, userPrompt,
-  signal, fetchImpl = fetch, retryDelayMs = 1000, maxRetries = 2,
+  signal, fetchImpl = fetch, retryDelayMs = 1000, maxRetries = 2, responseJsonSchema,
 }) {
   if (!apiKey) throw new Error('Missing GEMINI_API_KEY.');
   const url = `${API_ORIGIN}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
@@ -65,6 +65,7 @@ export async function* streamGeminiText({
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature: 0.2, maxOutputTokens: 24576,
+        ...(responseJsonSchema ? {responseMimeType:'application/json', responseJsonSchema} : {}),
         ...(/^gemini-3(?:\.|-)/.test(model) && /flash/.test(model) ? {thinkingConfig:{thinkingLevel:'MINIMAL'}} : {}),
       },
     }),
