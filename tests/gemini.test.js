@@ -114,3 +114,20 @@ test('overloaded model switches to fallback before streaming', async () => {
   assert.match(seen[1],/backup:/);
   assert.deepEqual(output,['generated']);
 });
+
+test('active streaming survives the first-token deadline', async () => {
+  const encoder = new TextEncoder();
+  const output = [];
+  for await (const piece of streamGeminiWithFallback({
+    apiKey:'test-key',model:'primary',fallbackModel:'backup',systemPrompt:'x',userPrompt:'y',
+    firstTokenTimeoutMs:30,idleTimeoutMs:250,
+    fetchImpl:async (_url,init) => new Response(new ReadableStream({start(controller) {
+      controller.enqueue(encoder.encode(fixture('first')));
+      setTimeout(() => {
+        if (init.signal.aborted) controller.error(init.signal.reason);
+        else {controller.enqueue(encoder.encode(fixture('last','STOP')));controller.close();}
+      }, 70);
+    }}))
+  })) output.push(piece);
+  assert.deepEqual(output,['first','last']);
+});

@@ -179,7 +179,7 @@ export default function App() {
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 90000);
+    const timeout = setTimeout(() => controller.abort(), 140000);
     const parser = new StreamingArtifactParser();
     const pendingActions = [];
     let responseMessage = '';

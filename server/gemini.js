@@ -63,7 +63,10 @@ export async function* streamGeminiText({
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 16000 },
+      generationConfig: {
+        temperature: 0.3, maxOutputTokens: 8192,
+        ...(/^gemini-3(?:\.|-)/.test(model) && /flash/.test(model) ? {thinkingConfig:{thinkingLevel:'MINIMAL'}} : {}),
+      },
     }),
     signal,
   };
@@ -111,22 +114,42 @@ export async function* streamGeminiText({
   if (!hasOutput) throw new Error('Gemini returned no text. Try another prompt or model.');
 }
 
-// Switch model only before any visible output, so XML artifacts cannot be mixed.
+// Fall back only before any text is emitted, never mix two artifacts.
+// The first-text timeout becomes a rolling inactivity timeout while streaming.
 export async function* streamGeminiWithFallback(options) {
   const models = [...new Set([options.model, options.fallbackModel].filter(Boolean))];
+  const firstTokenMs = options.firstTokenTimeoutMs ?? 25000;
+  const idleMs = options.idleTimeoutMs ?? 30000;
   for (let i = 0; i < models.length; i++) {
     let emitted = false;
-    const attemptSignal = AbortSignal.timeout(35000);
-    const signal = options.signal ? AbortSignal.any([options.signal, attemptSignal]) : attemptSignal;
+    const controller = new AbortController();
+    const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+    let timer;
+    function arm(ms) {
+      clearTimeout(timer);
+      timer = setTimeout(() => controller.abort(new Error('Gemini stopped responding.')), ms);
+    }
+    arm(firstTokenMs);
+    const started = Date.now();
     try {
       for await (const piece of streamGeminiText({...options, model: models[i], signal, maxRetries: 0})) {
+        if (!emitted) console.info('Buildora first output', models[i], Date.now()-started, 'ms');
         emitted = true;
+        arm(idleMs);
         yield piece;
       }
+      console.info('Buildora generation complete', models[i], Date.now()-started, 'ms');
       return;
     } catch (err) {
-      if (emitted || options.signal?.aborted || i === models.length - 1) throw err;
-      if (![404, 429, 500, 502, 503, 504].includes(err.code) && !attemptSignal.aborted) throw err;
+      console.warn('Buildora model attempt failed', models[i], controller.signal.aborted ? 'idle timeout' : (err.code || err.name), 'emitted:', emitted);
+      if (options.signal?.aborted) throw err;
+      if (emitted || i === models.length - 1) {
+        if (controller.signal.aborted) throw new Error('AI stopped responding. Your prompt and previous project are saved; retry with a smaller request.');
+        throw err;
+      }
+      if (![404, 429, 500, 502, 503, 504].includes(err.code) && !controller.signal.aborted) throw err;
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

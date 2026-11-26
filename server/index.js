@@ -49,7 +49,7 @@ function throttle(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, zapAvailable: zapAvailable(), zapProtected: false, zapMessage: zapMessage(), model: process.env.GEMINI_MODEL || 'gemini-3.5-flash' });
+  res.json({ ok: true, zapAvailable: zapAvailable(), zapProtected: false, zapMessage: zapMessage(), model: process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite' });
 });
 
 app.post('/api/generate', async (req, res, next) => {
@@ -77,15 +77,16 @@ app.post('/api/generate', async (req, res, next) => {
   let cancelled = false;
   res.on('close', () => { cancelled = true; });
   send({ type: 'start', mode: 'zap' });
+  const heartbeat = setInterval(() => send({type:'heartbeat'}), 10000);
   const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(new Error('Build timed out. Try a smaller prompt.')), 75000);
+  const deadline = setTimeout(() => controller.abort(new Error('Build timed out. Try a smaller prompt.')), 125000);
   res.on('close', () => controller.abort());
   try {
     // Zap is the only generation workflow. The key never reaches React.
     for await (const text of streamGeminiWithFallback({
       apiKey: process.env.GEMINI_API_KEY,
-      model: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
-      fallbackModel: process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite',
+      model: process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite',
+      fallbackModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
       systemPrompt: SYSTEM_PROMPT,
       userPrompt: makeUserPrompt(prompt, files),
       signal: controller.signal,
@@ -99,6 +100,7 @@ app.post('/api/generate', async (req, res, next) => {
     if (!cancelled) send({ type: 'error', message: controller.signal.aborted ? 'Build timed out. Retry with a smaller request.' : (err.message || 'Generation failed.') });
   } finally {
     clearTimeout(deadline);
+    clearInterval(heartbeat);
     res.end();
   }
 });
