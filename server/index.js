@@ -1,22 +1,12 @@
 import 'dotenv/config';
 import express from 'express';
-import { matchesAccessCode } from './zap-access.js';
-import { streamGeminiText } from './gemini.js';
+import { streamGeminiWithFallback } from './gemini.js';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Local use is allowed with an API key. Public use requires extra protection.
-// Hosted generation requires an opt-in and a long private access code.
 const isProduction = process.env.NODE_ENV === 'production';
-const protectedZap = isProduction && process.env.PUBLIC_ZAP_ENABLED === '1'
-  && (process.env.ZAP_ACCESS_CODE?.length ?? 0) >= 16;
-const publicZapBlocked = isProduction && !protectedZap;
-const zapAvailable = () => !publicZapBlocked && Boolean(process.env.GEMINI_API_KEY);
-const zapMessage = () => publicZapBlocked
-  ? 'Zap is locked on this public site. The owner must configure private access first.'
-  : !process.env.GEMINI_API_KEY
-    ? 'Zap needs a private GEMINI_API_KEY on the server.'
-    : protectedZap ? 'Enter your private Zap access code to generate an app.' : 'Zap is ready.';
+const zapAvailable = () => Boolean(process.env.GEMINI_API_KEY?.trim());
+const zapMessage = () => zapAvailable() ? 'AI builder is ready.' : 'AI builder is not configured on the server.';
 const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
 import { validateFiles } from '../shared/filesystem.js';
 import { SYSTEM_PROMPT, makeUserPrompt } from './prompts.js';
@@ -30,25 +20,39 @@ app.use((_req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '1mb' }));
-const requests = new Map();
+// Conservative process-wide limits protect a public demo even behind a proxy.
 const WINDOW_MS = 5 * 60 * 1000;
-const MAX_REQUESTS = 12;
-
+const MAX_REQUESTS = 4;
+const MAX_DAILY = 40;
+const requests = new Map();
+let daily = [];
+let active = 0;
 function throttle(req, res, next) {
-  const ip = req.ip ?? 'local';
+  if (req.get('sec-fetch-site') === 'cross-site') return res.status(403).json({error:'Use the Buildora website to generate.'});
   const now = Date.now();
-  const times = (requests.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
-  if (times.length >= MAX_REQUESTS) return res.status(429).json({ error: 'Rate limit: try again in a few minutes.' });
-  times.push(now);
-  requests.set(ip, times);
+  for (const [key, times] of requests) {
+    const recent = times.filter(t => now - t < WINDOW_MS);
+    if (recent.length) requests.set(key, recent); else requests.delete(key);
+  }
+  daily = daily.filter(t => now - t < 86400000);
+  const ip = req.ip ?? 'local';
+  const times = requests.get(ip) ?? [];
+  if (times.length >= MAX_REQUESTS || daily.length >= MAX_DAILY)
+    return res.status(429).json({error:'Public demo limit reached. Please try again later; editing and preview still work.'});
+  if (active >= 1) return res.status(429).json({error:'Another build is running. Please try again shortly.'});
+  times.push(now); daily.push(now); requests.set(ip, times);
+  active++;
+  let released = false;
+  const release = () => { if (!released) { released = true; active--; } };
+  res.once('finish', release); res.once('close', release);
   next();
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, zapAvailable: zapAvailable(), zapProtected: protectedZap, zapMessage: zapMessage(), model: process.env.GEMINI_MODEL || 'gemini-3.8-flash' });
+  res.json({ ok: true, zapAvailable: zapAvailable(), zapProtected: false, zapMessage: zapMessage(), model: process.env.GEMINI_MODEL || 'gemini-3.5-flash' });
 });
 
-app.post('/api/generate', throttle, async (req, res) => {
+app.post('/api/generate', async (req, res, next) => {
   const { prompt, files } = req.body ?? {};
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 2000) {
     return res.status(400).json({ error: 'Prompt must have 1–2000 characters.' });
@@ -59,17 +63,10 @@ app.post('/api/generate', throttle, async (req, res) => {
   if (req.body?.mode && req.body.mode !== 'zap') {
     return res.status(400).json({ error: 'Demo mode has been removed. Refresh Buildora to use Zap.' });
   }
-  if (publicZapBlocked) {
-    return res.status(403).json({ error: zapMessage() });
-  }
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(503).json({ error: zapMessage() });
-  }
-  // Validate the owner code BEFORE contacting the Gemini API.
-  if (protectedZap && !matchesAccessCode(req.get('x-zap-access-code'), process.env.ZAP_ACCESS_CODE)) {
-    return res.status(401).json({ error: 'Incorrect or missing Zap access code.' });
-  }
-
+  if (!zapAvailable()) return res.status(503).json({ error: zapMessage() });
+  next();
+}, throttle, async (req, res) => {
+  const { prompt, files } = req.body;
   res.writeHead(200, {
     'Content-Type': 'application/x-ndjson; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -80,13 +77,15 @@ app.post('/api/generate', throttle, async (req, res) => {
   let cancelled = false;
   res.on('close', () => { cancelled = true; });
   send({ type: 'start', mode: 'zap' });
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(new Error('Build timed out. Try a smaller prompt.')), 75000);
+  res.on('close', () => controller.abort());
   try {
     // Zap is the only generation workflow. The key never reaches React.
-    const controller = new AbortController();
-    res.on('close', () => controller.abort());
-    for await (const text of streamGeminiText({
+    for await (const text of streamGeminiWithFallback({
       apiKey: process.env.GEMINI_API_KEY,
-      model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+      model: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
+      fallbackModel: process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite',
       systemPrompt: SYSTEM_PROMPT,
       userPrompt: makeUserPrompt(prompt, files),
       signal: controller.signal,
@@ -96,8 +95,10 @@ app.post('/api/generate', throttle, async (req, res) => {
     }
     if (!cancelled) send({ type: 'done' });
   } catch (err) {
-    if (!cancelled) send({ type: 'error', message: err.message || 'Generation failed.' });
+    console.warn('Buildora generation failed:', err.name, err.code || '');
+    if (!cancelled) send({ type: 'error', message: controller.signal.aborted ? 'Build timed out. Retry with a smaller request.' : (err.message || 'Generation failed.') });
   } finally {
+    clearTimeout(deadline);
     res.end();
   }
 });

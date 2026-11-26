@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { streamGeminiText } from '../server/gemini.js';
+import { streamGeminiText, streamGeminiWithFallback } from '../server/gemini.js';
 
 function mockStream(chunks) {
   let index = 0;
@@ -97,4 +97,20 @@ test('Gemini does not retry quota errors', async () => {
     },
   }), /429/);
   assert.equal(calls, 1);
+});
+
+test('overloaded model switches to fallback before streaming', async () => {
+  const seen = [];
+  const output = [];
+  for await (const piece of streamGeminiWithFallback({
+    apiKey: 'test-key', model: 'primary', fallbackModel: 'backup', systemPrompt: 'x', userPrompt: 'y',
+    fetchImpl: async url => {
+      seen.push(url);
+      if (url.includes('/primary:')) return new Response(JSON.stringify({error:{message:'busy'}}),{status:503});
+      return new Response(mockStream([fixture('generated','STOP')]));
+    }
+  })) output.push(piece);
+  assert.equal(seen.length,2);
+  assert.match(seen[1],/backup:/);
+  assert.deepEqual(output,['generated']);
 });

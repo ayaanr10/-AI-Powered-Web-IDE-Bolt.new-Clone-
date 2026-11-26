@@ -53,7 +53,7 @@ function eventText(data) {
 
 export async function* streamGeminiText({
   apiKey, model = 'gemini-3.8-flash', systemPrompt, userPrompt,
-  signal, fetchImpl = fetch, retryDelayMs = 1000,
+  signal, fetchImpl = fetch, retryDelayMs = 1000, maxRetries = 2,
 }) {
   if (!apiKey) throw new Error('Missing GEMINI_API_KEY.');
   const url = `${API_ORIGIN}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
@@ -71,9 +71,9 @@ export async function* streamGeminiText({
   // Google's 503 means temporary overload. Retry only before any stream begins.
   // Two short retries prevent an outage from triggering unlimited API calls.
   let response;
-  for (let attempt = 0; attempt <= 2; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     response = await fetchImpl(url, request);
-    if (response.status !== 503 || attempt === 2) break;
+    if (response.status !== 503 || attempt === maxRetries) break;
     await response.body?.cancel?.();
     await pause(retryDelayMs * (2 ** attempt), undefined, { signal });
   }
@@ -84,9 +84,11 @@ export async function* streamGeminiText({
     const extra = response.status === 429
       ? ' Check your quota in Google AI Studio.'
       : response.status === 503
-        ? ' Gemini is overloaded. Buildora retried twice; try later or switch to another model available in AI Studio.'
+        ? (maxRetries === 2 ? ' Gemini is overloaded. Buildora retried twice; try later or switch to another model available in AI Studio.' : ' Gemini is overloaded.')
         : '';
-    throw new Error(`Gemini API ${response.status}: ${detail}${extra}`);
+    const error = new Error(`Gemini API ${response.status}: ${detail}${extra}`.replaceAll(apiKey, '[redacted]'));
+    error.code = response.status;
+    throw error;
   }
   if (!response.body) throw new Error('Gemini returned no streaming body.');
 
@@ -107,4 +109,24 @@ export async function* streamGeminiText({
     reader.releaseLock();
   }
   if (!hasOutput) throw new Error('Gemini returned no text. Try another prompt or model.');
+}
+
+// Switch model only before any visible output, so XML artifacts cannot be mixed.
+export async function* streamGeminiWithFallback(options) {
+  const models = [...new Set([options.model, options.fallbackModel].filter(Boolean))];
+  for (let i = 0; i < models.length; i++) {
+    let emitted = false;
+    const attemptSignal = AbortSignal.timeout(35000);
+    const signal = options.signal ? AbortSignal.any([options.signal, attemptSignal]) : attemptSignal;
+    try {
+      for await (const piece of streamGeminiText({...options, model: models[i], signal, maxRetries: 0})) {
+        emitted = true;
+        yield piece;
+      }
+      return;
+    } catch (err) {
+      if (emitted || options.signal?.aborted || i === models.length - 1) throw err;
+      if (![404, 429, 500, 502, 503, 504].includes(err.code) && !attemptSignal.aborted) throw err;
+    }
+  }
 }

@@ -1,6 +1,6 @@
-export async function* generateStream({ prompt, files, signal, accessCode = '' }) {
+export async function* generateStream({ prompt, files, signal }) {
   const response = await fetch('/api/generate', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', ...(accessCode ? { 'x-zap-access-code': accessCode } : {}) },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt, files }), signal,
   });
   if (!response.ok) {
