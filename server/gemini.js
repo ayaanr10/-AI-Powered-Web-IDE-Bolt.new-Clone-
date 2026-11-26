@@ -43,7 +43,7 @@ function eventText(data) {
   const candidate = payload.candidates?.[0];
   const reason = candidate?.finishReason;
   if (reason && !['STOP', 'FINISH_REASON_UNSPECIFIED'].includes(reason)) {
-    if (reason === 'MAX_TOKENS') throw new Error('Gemini reached the output limit. Try a smaller app or simpler request.');
+    if (reason === 'MAX_TOKENS') { const error = new Error('Gemini reached the output limit. Try a smaller app or simpler request.'); error.code = 'MAX_TOKENS'; throw error; }
     throw new Error(`Gemini stopped generation (${reason}). Try a different prompt.`);
   }
   return (candidate?.content?.parts || [])
@@ -64,7 +64,7 @@ export async function* streamGeminiText({
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       generationConfig: {
-        temperature: 0.3, maxOutputTokens: 8192,
+        temperature: 0.2, maxOutputTokens: 24576,
         ...(/^gemini-3(?:\.|-)/.test(model) && /flash/.test(model) ? {thinkingConfig:{thinkingLevel:'MINIMAL'}} : {}),
       },
     }),
@@ -109,6 +109,8 @@ export async function* streamGeminiText({
       if (done) break;
     }
   } finally {
+    // Cancel the HTTP stream if the complete artifact was already received.
+    try { await reader.cancel(); } catch { /* stream may already be closed */ }
     reader.releaseLock();
   }
   if (!hasOutput) throw new Error('Gemini returned no text. Try another prompt or model.');
@@ -132,7 +134,8 @@ export async function* streamGeminiWithFallback(options) {
     arm(firstTokenMs);
     const started = Date.now();
     try {
-      for await (const piece of streamGeminiText({...options, model: models[i], signal, maxRetries: 0})) {
+      const userPrompt = i === 0 ? options.userPrompt : options.userPrompt + '\n\nReturn a compact complete implementation; avoid long comments, repetitive markup and extra files. Finish the artifact promptly.';
+      for await (const piece of streamGeminiText({...options, userPrompt, model: models[i], signal, maxRetries: 0})) {
         if (!emitted) console.info('Buildora first output', models[i], Date.now()-started, 'ms');
         emitted = true;
         arm(idleMs);
@@ -143,11 +146,13 @@ export async function* streamGeminiWithFallback(options) {
     } catch (err) {
       console.warn('Buildora model attempt failed', models[i], controller.signal.aborted ? 'idle timeout' : (err.code || err.name), 'emitted:', emitted);
       if (options.signal?.aborted) throw err;
-      if (emitted || i === models.length - 1) {
+      const restartable = emitted && err.code === 'MAX_TOKENS' && typeof options.onRestart === 'function';
+      if ((emitted && !restartable) || i === models.length - 1) {
         if (controller.signal.aborted) throw new Error('AI stopped responding. Your prompt and previous project are saved; retry with a smaller request.');
         throw err;
       }
-      if (![404, 429, 500, 502, 503, 504].includes(err.code) && !controller.signal.aborted) throw err;
+      if (![404, 429, 500, 502, 503, 504, 'MAX_TOKENS'].includes(err.code) && !controller.signal.aborted) throw err;
+      if (restartable) options.onRestart();
     } finally {
       clearTimeout(timer);
     }

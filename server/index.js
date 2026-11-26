@@ -9,6 +9,7 @@ const zapAvailable = () => Boolean(process.env.GEMINI_API_KEY?.trim());
 const zapMessage = () => zapAvailable() ? 'AI builder is ready.' : 'AI builder is not configured on the server.';
 const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
 import { validateFiles } from '../shared/filesystem.js';
+import { StreamingArtifactParser } from '../shared/artifact-parser.js';
 import { SYSTEM_PROMPT, makeUserPrompt } from './prompts.js';
 
 export const app = express();
@@ -83,6 +84,9 @@ app.post('/api/generate', async (req, res, next) => {
   res.on('close', () => controller.abort());
   try {
     // Zap is the only generation workflow. The key never reaches React.
+    let parser = new StreamingArtifactParser();
+    let changes = 0;
+    let complete = false;
     for await (const text of streamGeminiWithFallback({
       apiKey: process.env.GEMINI_API_KEY,
       model: process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite',
@@ -90,11 +94,18 @@ app.post('/api/generate', async (req, res, next) => {
       systemPrompt: SYSTEM_PROMPT,
       userPrompt: makeUserPrompt(prompt, files),
       signal: controller.signal,
+      onRestart: () => { parser = new StreamingArtifactParser(); changes = 0; send({type:'restart'}); },
     })) {
       if (cancelled) break;
+      const actions = parser.push(text);
+      changes += actions.filter(action => action.type !== 'message').length;
       send({ type: 'chunk', text });
+      if (parser.finished) { complete = true; break; }
     }
-    if (!cancelled) send({ type: 'done' });
+    if (!cancelled) {
+      if (!complete || !changes) throw new Error('AI did not return a complete project. Please retry.');
+      send({ type: 'done' });
+    }
   } catch (err) {
     console.warn('Buildora generation failed:', err.name, err.code || '');
     if (!cancelled) send({ type: 'error', message: controller.signal.aborted ? 'Build timed out. Retry with a smaller request.' : (err.message || 'Generation failed.') });

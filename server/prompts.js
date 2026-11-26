@@ -17,7 +17,7 @@ REQUIREMENTS:
 - File contents are RAW, unescaped code (JSX, HTML and CSS can contain < and >). Do NOT use CDATA or markdown fences.
 - Put each complete file in a <file> tag. Never write a partial file or diff.
 - Make real, interactive, polished and responsive UIs, not static wireframes.
-- For simple sites, update only App.jsx and styles.css. Keep code compact and avoid excessive content or unnecessary files. Aim for at most 350 lines total while completing all requested functionality.
+- For a simple new website, output only src/App.jsx and src/styles.css. Replace the old app instead of extending an unrelated project. Aim for at most 180 lines total, with reusable arrays and mapped components, compact CSS and no repeated markup. Do not output additional files unless absolutely needed. Stop immediately after the closing artifact tag.
 - Use the existing React 19 + Vite project and its dependencies, including lucide-react icons.
 - Do not add unnecessary packages. Existing files not mentioned in the output stay untouched.
 - Do not introduce shell commands or explain installation; the IDE starts the app automatically.

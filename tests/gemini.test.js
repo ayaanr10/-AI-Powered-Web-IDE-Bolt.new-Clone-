@@ -131,3 +131,17 @@ test('active streaming survives the first-token deadline', async () => {
   })) output.push(piece);
   assert.deepEqual(output,['first','last']);
 });
+
+test('output limit restarts partial generation only with a reset handler', async () => {
+  let resets = 0;
+  const output = [];
+  for await (const piece of streamGeminiWithFallback({
+    apiKey:'test-key',model:'primary',fallbackModel:'backup',systemPrompt:'x',userPrompt:'y',
+    onRestart: () => { resets++; output.length = 0; },
+    fetchImpl: async url => new Response(mockStream(url.includes('/primary:') ? [
+      fixture('partial'), fixture('', 'MAX_TOKENS')
+    ] : [fixture('complete','STOP')]))
+  })) output.push(piece);
+  assert.equal(resets,1);
+  assert.deepEqual(output,['complete']);
+});

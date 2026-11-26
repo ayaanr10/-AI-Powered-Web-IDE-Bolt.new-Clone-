@@ -180,7 +180,7 @@ export default function App() {
     const controller = new AbortController();
     abortRef.current = controller;
     const timeout = setTimeout(() => controller.abort(), 140000);
-    const parser = new StreamingArtifactParser();
+    let parser = new StreamingArtifactParser();
     const pendingActions = [];
     let responseMessage = '';
 
@@ -191,6 +191,11 @@ export default function App() {
         files: filesRef.current,
         signal: controller.signal,
       })) {
+        if (event.type === 'restart') {
+          parser = new StreamingArtifactParser(); pendingActions.length = 0; responseMessage = '';
+          setMessages(old => [...old.slice(0,-1), {role:'assistant',text:'Trying a backup AI model…'}]);
+          continue;
+        }
         if (event.type === 'error') throw new Error(event.message);
         if (event.type === 'done') { finished = true; break; }
         if (event.type !== 'chunk') continue;
